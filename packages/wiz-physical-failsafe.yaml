@@ -889,7 +889,7 @@ switch:
 
 number:
   - platform: template
-    name: "Luminosità all'accensione software"
+    name: "Accensione software: luminosità"
     id: wiz_on_brightness
     icon: mdi:brightness-6
     entity_category: config
@@ -905,7 +905,7 @@ number:
       sorting_group_id: grp_wiz
       sorting_weight: 60
   - platform: template
-    name: "Temperatura colore all'accensione software"
+    name: "Accensione software: temperatura colore"
     id: wiz_on_kelvin
     icon: mdi:thermometer
     entity_category: config
