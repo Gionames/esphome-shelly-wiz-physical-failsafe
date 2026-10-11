@@ -108,6 +108,21 @@ globals:
     type: uint32_t
     restore_value: true
     initial_value: "0"
+  - id: press_pending     # modalità "al rilascio": c'è una pressione in attesa del rilascio
+    type: bool
+    initial_value: "false"
+  - id: press_act         # azione memorizzata alla pressione (0 commuta, 1 accendi)
+    type: int
+    initial_value: "0"
+  - id: lp_done           # la pressione lunga è già scattata
+    type: bool
+    initial_value: "false"
+  - id: alt_req           # prossimo comando di accensione con i valori alternativi
+    type: bool
+    initial_value: "false"
+  - id: alt_cur           # il comando di accensione in corso usa i valori alternativi
+    type: bool
+    initial_value: "false"
 
 # --- Modalità input selezionabile da HA (senza riflash) ---
 # Stesse modalità dello Shelly: Flip, Momentary, Follow, Activate, Detached (vedi handler nello specchio)
@@ -127,6 +142,35 @@ select:
       - "Pulsante: ogni pressione accende, non spegne (Activate)"
       - "Scollegato: l'ingresso non comanda nulla (Detached)"
     initial_option: "Interruttore: ogni cambio di posizione commuta la luce (Flip)"
+    restore_value: true
+
+  - platform: template
+    name: "Wiz: comando del pulsante"
+    id: cmd_timing_select
+    web_server:
+      sorting_group_id: grp_ingresso
+    icon: mdi:gesture-tap-button
+    entity_category: config
+    optimistic: true
+    options:
+      - "Alla pressione: subito, ma a luce accesa la pressione lunga la spegne prima"
+      - "Al rilascio: aggiunge la durata del tocco, nessun lampeggio"
+    initial_option: "Alla pressione: subito, ma a luce accesa la pressione lunga la spegne prima"
+    restore_value: true
+
+  - platform: template
+    name: "Wiz: pressione lunga"
+    id: longpress_select
+    web_server:
+      sorting_group_id: grp_ingresso
+    icon: mdi:gesture-tap-hold
+    entity_category: config
+    optimistic: true
+    options:
+      - "Nessuna azione"
+      - "Imposta luminosità e colore alternativi alle Wiz"
+      - "Manda l'evento a Home Assistant"
+    initial_option: "Imposta luminosità e colore alternativi alle Wiz"
     restore_value: true
 
   - platform: template
@@ -160,20 +204,36 @@ binary_sensor:
             bool first = id(sw_last) < 0;
             id(sw_last) = x ? 1 : 0;
             if (first || !id(boot_done)) return;
-            id(input_event).trigger(x ? "premuto" : "rilasciato");
-            // senza clic multipli il "click" parte subito alla pressione, senza attendere 0,4 s
-            if (x && !id(multiclick_sw).state) id(input_event).trigger("click");
-            if (id(input_lock).state) return;   // ingresso bloccato: solo eventi, nessuna azione
+            if (id(input_lock).state) { id(press_pending) = false; return; }   // ingresso bloccato: nessuna azione
             // indice della modalità: 0 Flip, 1 Momentary, 2 Follow, 3 Activate, 4 Detached
             const int m = id(input_mode_select).active_index().value_or(0);
+            const bool push = (m == 1 || m == 3);                         // modalità a pulsante
+            const bool on_rel = push && id(cmd_timing_select).active_index().value_or(0) == 1;
+            const int lp = id(longpress_select).active_index().value_or(0);   // 0 nessuna, 1 valori alternativi, 2 evento HA
             int act = -1;                       // 0 commuta, 1 accendi, 2 spegni
             if (m == 0) act = 0;
             else if (m == 1) { if (x) act = 0; }
             else if (m == 2) act = x ? 1 : 2;
             else if (m == 3) { if (x) act = 1; }
+            if (push) {
+              if (x) {
+                id(lp_done) = false;
+                id(press_pending) = false;
+                if (lp != 0) id(longpress_wait).execute();
+                // "al rilascio": il comando parte al rilascio; in failsafe resta immediato
+                if (on_rel && !id(failsafe_mode) && act >= 0) { id(press_pending) = true; id(press_act) = act; return; }
+              } else {
+                id(longpress_wait).stop();
+                if (!id(press_pending)) return;
+                id(press_pending) = false;
+                if (id(lp_done)) return;        // la pressione lunga ha già agito
+                act = id(press_act);
+              }
+            }
             if (act < 0) return;
             // come lo Shelly: un comando di accensione a luce già accesa fa ripartire l'auto-off
             if (act == 1 && id(light_on_sensor).state && id(auto_off_sw).state) id(tmr_arm).execute(1);
+            id(alt_req) = false;
             id(sw_action) = act;
             id(sw_changed).execute();
 
@@ -237,31 +297,6 @@ binary_sensor:
     lambda: 'return id(wiz_lsock) != nullptr;'
     web_server:
       sorting_group_id: grp_wiz
-
-  # clic singolo/doppio/lungo come eventi per HA (utili soprattutto con un pulsante)
-  - platform: template
-    id: sw_click
-    internal: true
-    lambda: 'return id(switch_input_mirror).state;'
-    on_multi_click:
-      - timing:
-          - ON for at most 0.6s
-          - OFF for at most 0.4s
-          - ON for at most 0.6s
-          - OFF for at least 0.3s
-        then:
-          - lambda: 'if (id(multiclick_sw).state) id(input_event).trigger("doppio_click");'
-      - timing:
-          - ON for at most 0.6s
-          - OFF for at least 0.4s
-        then:
-          - lambda: 'if (id(multiclick_sw).state) id(input_event).trigger("click");'
-      - timing:
-          - ON for at least 1s
-        then:
-          - event.trigger:
-              id: input_event
-              event_type: pressione_lunga
 
 sensor:
   # quante lampade hanno risposto all'ultimo comando (si aggiorna solo quando cambia)
@@ -401,9 +436,9 @@ script:
 
                 // 1) (ri)invio, solo alle lampade che non hanno ancora risposto
                 if (el >= id(wiz_next) && el < (uint32_t) id(wiz_deadline)) {
-                  int bri = (int) id(wiz_on_brightness).state;
+                  int bri = (int) (id(alt_cur) ? id(wiz_alt_brightness).state : id(wiz_on_brightness).state);
                   if (bri < 10 || bri > 100) bri = 100;
-                  int kel = (int) id(wiz_on_kelvin).state;
+                  int kel = (int) (id(alt_cur) ? id(wiz_alt_kelvin).state : id(wiz_on_kelvin).state);
                   if (kel < 2200 || kel > 6500) kel = 2700;
                   static char on_msg[112];
                   snprintf(on_msg, sizeof(on_msg), "{\"method\":\"setPilot\",\"params\":{\"state\":true,\"dimming\":%d,\"temp\":%d}}", bri, kel);
@@ -487,6 +522,25 @@ script:
                 }
             - delay: 15ms
 
+  # pressione lunga (solo modalità a pulsante): scatta alla soglia, senza aspettare il rilascio
+  - id: longpress_wait
+    mode: restart
+    then:
+      - delay: !lambda 'return (uint32_t) (id(lp_threshold).state * 1000);'
+      - lambda: |-
+          if (id(sw_last) != 1) return;
+          id(lp_done) = true;
+          id(press_pending) = false;
+          const int lp = id(longpress_select).active_index().value_or(0);
+          if (lp == 1) {
+            // accende (o resta accesa) con luminosità e colore alternativi; in failsafe non c'è nessuna Wiz da comandare
+            id(alt_req) = !id(failsafe_mode) && id(relay_1).state;
+            id(sw_action) = 1;
+            id(sw_changed).execute();
+          } else if (lp == 2) {
+            id(input_event).trigger("pressione_lunga");
+          }
+
   - id: sw_changed
     mode: restart
     then:
@@ -530,7 +584,10 @@ script:
                 id(want_on) = id(sw_action) == 1 ? true : (id(sw_action) == 2 ? false : !any);
             - script.execute:
                 id: wiz_cmd
-                kind: !lambda 'return id(want_on) ? 1 : 2;'
+                kind: !lambda |-
+                  id(alt_cur) = id(want_on) && id(alt_req);
+                  id(alt_req) = false;
+                  return id(want_on) ? 1 : 2;
                 retry_ms: ${wiz_retry_ms}
                 deadline_ms: ${wiz_deadline_ms}
             - wait_until:
@@ -841,15 +898,6 @@ switch:
       sorting_group_id: grp_timer
 
   - platform: template
-    name: "Riconosci clic multipli"
-    id: multiclick_sw
-    icon: mdi:gesture-double-tap
-    entity_category: config
-    optimistic: true
-    restore_mode: RESTORE_DEFAULT_ON
-    web_server:
-      sorting_group_id: grp_ingresso
-  - platform: template
     name: "Blocca ingresso"
     id: input_lock
     icon: mdi:lock
@@ -889,7 +937,7 @@ switch:
 
 number:
   - platform: template
-    name: "Accensione software: luminosità"
+    name: "Wiz: luminosità accensione"
     id: wiz_on_brightness
     icon: mdi:brightness-6
     entity_category: config
@@ -905,7 +953,7 @@ number:
       sorting_group_id: grp_wiz
       sorting_weight: 60
   - platform: template
-    name: "Accensione software: temperatura colore"
+    name: "Wiz: temperatura colore accensione"
     id: wiz_on_kelvin
     icon: mdi:thermometer
     entity_category: config
@@ -920,6 +968,53 @@ number:
     web_server:
       sorting_group_id: grp_wiz
       sorting_weight: 61
+  - platform: template
+    name: "Wiz: luminosità alternativa"
+    id: wiz_alt_brightness
+    icon: mdi:brightness-4
+    entity_category: config
+    unit_of_measurement: "%"
+    min_value: 10
+    max_value: 100
+    step: 5
+    mode: box
+    optimistic: true
+    restore_value: true
+    initial_value: 20
+    web_server:
+      sorting_group_id: grp_wiz
+      sorting_weight: 62
+  - platform: template
+    name: "Wiz: temperatura colore alternativa"
+    id: wiz_alt_kelvin
+    icon: mdi:thermometer-low
+    entity_category: config
+    unit_of_measurement: "K"
+    min_value: 2200
+    max_value: 6500
+    step: 100
+    mode: box
+    optimistic: true
+    restore_value: true
+    initial_value: 2200
+    web_server:
+      sorting_group_id: grp_wiz
+      sorting_weight: 63
+  - platform: template
+    name: "Wiz: durata pressione lunga"
+    id: lp_threshold
+    icon: mdi:timer-outline
+    entity_category: config
+    unit_of_measurement: "s"
+    min_value: 0.4
+    max_value: 3
+    step: 0.1
+    mode: box
+    optimistic: true
+    restore_value: true
+    initial_value: 1
+    web_server:
+      sorting_group_id: grp_ingresso
   - platform: template
     name: "Auto-off ritardo"
     id: auto_off_delay
@@ -966,6 +1061,22 @@ number:
       sorting_group_id: grp_wiz
 
 text_sensor:
+  - platform: template
+    name: "Wiz: guida comando pulsante"
+    icon: mdi:information-outline
+    entity_category: diagnostic
+    update_interval: 1h
+    lambda: 'return {"Pressione = comando subito (pressione lunga: la luce si spegne e poi passa ai valori alternativi). Rilascio = comando al rilascio, nessun lampeggio ma ritardo pari alla durata del tocco."};'
+    web_server:
+      sorting_group_id: grp_diag
+  - platform: template
+    name: "Wiz: guida pressione lunga"
+    icon: mdi:information-outline
+    entity_category: diagnostic
+    update_interval: 1h
+    lambda: 'return {"Solo in modalità a pulsante. Alla durata impostata: luminosità e colore alternativi (accende se spenta) oppure evento a Home Assistant. In failsafe non agisce."};'
+    web_server:
+      sorting_group_id: grp_diag
   - platform: template
     name: "Timer: scade alle"
     id: tmr_end_text
@@ -1024,10 +1135,6 @@ event:
     id: input_event
     device_class: button
     event_types:
-      - premuto
-      - rilasciato
-      - click
-      - doppio_click
       - pressione_lunga
     web_server:
       sorting_group_id: grp_ingresso
