@@ -9,7 +9,7 @@ substitutions:
   coil_first_channel: "4"
 
 external_components:
-  - source: github://Gionames/esphome-shelly-wiz-physical-failsafe@v1.1.0
+  - source: github://Gionames/esphome-shelly-wiz-physical-failsafe@v2.0.0
     components: [coil_pwm]
 
 coil_pwm:
