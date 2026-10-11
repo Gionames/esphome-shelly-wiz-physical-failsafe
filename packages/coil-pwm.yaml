@@ -14,8 +14,8 @@ external_components:
 
 coil_pwm:
   id: coil_pwm_hub
-  relays: [${coil_relays}]
-  pins: [${coil_pins}]
+  relays: "${coil_relays}"
+  pins: "${coil_pins}"
   hold_percent: coil_hold_pct
   first_channel: ${coil_first_channel}
 
