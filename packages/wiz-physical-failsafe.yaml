@@ -1,129 +1,122 @@
-# wiz-physical-failsafe.yaml
-# Controls a group of Wiz bulbs (UDP, port 38899) from a Shelly Gen4 running ESPHome,
-# with a PHYSICAL failsafe: when fewer bulbs than the quorum answer (Wi-Fi, router,
-# Home Assistant or bulbs down) the wall switch drives the Shelly relay directly, and
-# the relay powers the bulbs. When the bulbs are back, control returns to the Wiz.
-#
-# Needs the Shelly package (automatous-io/shelly-gen4-esphome, v1.5.2 or later) that
-# provides relay_1, relay_linking_select and the switch input id given in wiz_input_id.
-# Tested with ESPHome 2026.9.1 (ESP-IDF 5.5.5).
-#
-# Required substitutions:
-#   wiz_ips        comma separated bulb IPs (max 8), e.g. "192.168.1.10,192.168.1.11"
-#   wiz_input_id   id of the Shelly switch input binary_sensor (switch_input_1 on 2PM, switch_input on 1PM Mini)
-# Optional substitutions: wiz_sfx (suffix in entity names, default " 1"), wiz_group_name,
-#   wiz_retry_ms, wiz_deadline_ms, wiz_confirm_ms, health_check_interval, poll_interval
+# wiz-physical-failsafe.yaml  (v2)
+# Controllo diretto di un gruppo di lampadine Wiz (UDP 38899) da uno Shelly Gen4 con failsafe fisico:
+# il relè alimenta le lampade; se rispondono meno di "Quorum Wiz", l'interruttore a muro comanda il relè.
+# Richiede nel file del dispositivo:
+#   wiz_ips        IP delle Wiz separati da virgola (max 8)
+#   wiz_input_id   id dell'ingresso del package Shelly (switch_input su Mini, switch_input_1 su 2PM)
+# Opzionale: wiz_group_name (titolo gruppo nella pagina web), e tutte le variabili qui sotto.
+# L'id del relè deve essere relay_1.
 substitutions:
+  wiz_input_id: "switch_input"
+  wiz_group_name: "Luce"
+  # --- failsafe Wiz ---
+  wiz_quorum: "((int) id(wiz_quorum_num).state)"   # ora regolabile da HA/pagina web: entità "Quorum Wiz"
   wiz_retry_ms: "400"            # ogni quanto rimanda il comando alle lampade che non hanno ancora risposto
   wiz_deadline_ms: "1400"        # tempo massimo per un comando di accensione/spegnimento
   wiz_confirm_ms: "800"          # tempo massimo per getPilot (conferma e lettura periodica)
+  powercycle_ms: "0"             # relè aperto per tanto se nessuna Wiz risponde ma è alimentata (0 = disattivato)
   health_check_interval: "10s"   # con failsafe attivo, ogni quanto riprova a parlare con le Wiz
   poll_interval: "30s"           # rilettura di sicurezza dello stato (la sottoscrizione lo tiene già aggiornato)
-  wiz_sfx: " 1"                  # suffisso nei nomi delle entità ("" per nomi senza numero)
-  wiz_group_name: "Wiz"          # titolo del gruppo nella web UI
 
-esp32:
-  framework:
-    sdkconfig_options:
-      CONFIG_LWIP_MAX_SOCKETS: "20"
-
-# ---------------------------------------------------------------------------
-# Due canali indipendenti, stessa logica dello Shelly del bagno grande:
-#   normale : l'interruttore comanda le Wiz del canale via UDP (relè sempre chiuso)
-#   failsafe: se rispondono meno di "Quorum Wiz N" lampade, l'interruttore comanda il relè
-# Una sola sottoscrizione (porta 38900) per tutte le Wiz, smistata per canale.
-# ---------------------------------------------------------------------------
 globals:
+  - id: failsafe_mode      # true = l'interruttore commuta il relè, le Wiz vengono ignorate
+    type: bool
+    initial_value: "false"
   - id: boot_done
     type: bool
     initial_value: "false"
-  - id: pon_done
-    type: bool
-    initial_value: "false"
-  - id: wiz_lsock
-    type: esphome::socket::Socket *
-    initial_value: "nullptr"
-  - id: wiz_myip
-    type: uint32_t
-    initial_value: "0"
-  - id: wiz_reg_t
-    type: uint32_t
-    initial_value: "0"
-  # ===== canale 1 (O1: soggiorno sotto 2-3-4-5-6) =====
-  - id: fs1_mode            # true = l'interruttore comanda il relè, le Wiz vengono ignorate
-    type: bool
-    initial_value: "false"
-  - id: sw1_last            # -1 = non ancora letto
+  - id: sw_last            # -1 = non ancora letto
     type: int
     initial_value: "-1"
-  - id: sw1_action          # 0 commuta, 1 accendi, 2 spegni
-    type: int
-    initial_value: "0"
-  - id: want1_on
+  - id: want_on            # stato che l'azione corrente vuole ottenere
     type: bool
     initial_value: "false"
-  - id: wiz1_n
+  # --- stato per lampada (indice = posizione in wiz_ips) ---
+  - id: wiz_n              # quante lampade sono configurate (letto da wiz_ips al primo comando)
     type: int
     initial_value: "0"
-  - id: wiz1_ip32
+  - id: wiz_ip32           # IPv4 in formato di rete
     type: uint32_t[8]
-  - id: wiz1_known
+  - id: wiz_known          # true = conosco lo stato di questa lampada
     type: bool[8]
-  - id: wiz1_lit
+  - id: wiz_lit            # ultimo stato noto (true = accesa)
     type: bool[8]
-  - id: wiz1_acked
+  - id: wiz_acked          # ha risposto al comando in corso
     type: bool[8]
-  - id: wiz1_rtt
+  - id: wiz_rtt            # tempo di risposta del comando in corso (ms)
     type: uint16_t[8]
-  - id: wiz1_seen
-    type: uint32_t[8]
-  - id: wiz1_busy
+  # --- comando UDP in corso ---
+  - id: wiz_busy
     type: bool
     initial_value: "false"
-  - id: wiz1_sock
+  - id: wiz_sock
     type: esphome::socket::Socket *
     initial_value: "nullptr"
-  - id: wiz1_kind
+  - id: wiz_kind           # 0 = getPilot, 1 = setPilot acceso, 2 = setPilot spento
     type: int
     initial_value: "0"
-  - id: wiz1_retry
+  - id: wiz_retry
     type: int
     initial_value: "400"
-  - id: wiz1_deadline
+  - id: wiz_deadline
     type: int
     initial_value: "1400"
-  - id: wiz1_t0
+  - id: wiz_t0
     type: uint32_t
     initial_value: "0"
-  - id: wiz1_next
+  - id: wiz_next           # istante (ms dall'inizio del comando) del prossimo invio
     type: uint32_t
     initial_value: "0"
-  - id: wiz1_n_ok
+  - id: wiz_n_ok           # lampade che hanno risposto all'ultimo comando concluso
     type: int
     initial_value: "0"
-  - id: tmr1_kind           # 0 nessuno, 1 auto-off, 2 auto-on
-    type: int
-    initial_value: "0"
-  - id: tmr1_end
+  # --- sottoscrizione agli aggiornamenti delle Wiz ---
+  - id: wiz_lsock          # socket in ascolto sulla porta 38900
+    type: esphome::socket::Socket *
+    initial_value: "nullptr"
+  - id: wiz_myip           # IP di questo Shelly, in formato di rete
     type: uint32_t
     initial_value: "0"
-  - id: light1_last
+  - id: wiz_reg_t          # istante dell'ultima registrazione
+    type: uint32_t
+    initial_value: "0"
+  - id: wiz_seen           # ultimo messaggio ricevuto da ogni lampada (ms)
+    type: uint32_t[8]
+
+  # --- ingresso, timer, stato all'accensione, statistiche failsafe ---
+  - id: sw_action          # azione richiesta a sw_changed: 0 = commuta, 1 = accendi, 2 = spegni
+    type: int
+    initial_value: "0"
+  - id: tmr_kind           # timer in corso: 0 = nessuno, 1 = auto-off, 2 = auto-on
+    type: int
+    initial_value: "0"
+  - id: tmr_end            # millis() di scadenza del timer
+    type: uint32_t
+    initial_value: "0"
+  - id: pon_done           # gestione dello stato all'accensione già fatta
+    type: bool
+    initial_value: "false"
+  - id: light_last         # ultimo stato della luce, sopravvive ai blackout
     type: bool
     restore_value: true
     initial_value: "false"
-  - id: fs1_count
+  - id: fs_count           # quante volte è scattato il failsafe
     type: uint32_t
     restore_value: true
     initial_value: "0"
-  - id: fs1_last_epoch
+  - id: fs_last_epoch      # quando è scattato l'ultima volta (epoch, 0 = mai)
     type: uint32_t
     restore_value: true
     initial_value: "0"
 
+# --- Modalità input selezionabile da HA (senza riflash) ---
+# Stesse modalità dello Shelly: Flip, Momentary, Follow, Activate, Detached (vedi handler nello specchio)
 select:
   - platform: template
-    name: "Modalità ingresso${wiz_sfx}"
-    id: input1_mode_select
+    name: "Modalità Input"
+    id: input_mode_select
+    web_server:
+      sorting_group_id: grp_ingresso
     icon: mdi:light-switch
     entity_category: config
     optimistic: true
@@ -133,13 +126,12 @@ select:
       - "Interruttore: segue la posizione (Follow)"
       - "Pulsante: solo accende (Activate)"
       - "Scollegato (Detached)"
-    initial_option: "Pulsante: commuta (Momentary)"
+    initial_option: "Interruttore: commuta a ogni scatto (Flip)"
     restore_value: true
-    web_server:
-      sorting_group_id: grp_c1
+
   - platform: template
-    name: "Stato all'accensione${wiz_sfx}"
-    id: power_on1_select
+    name: "Stato all'accensione"
+    id: power_on_select
     icon: mdi:power-settings
     entity_category: config
     optimistic: true
@@ -151,9 +143,92 @@ select:
     initial_option: "Ultimo stato"
     restore_value: true
     web_server:
-      sorting_group_id: grp_c1
+      sorting_group_id: grp_luce
 
 binary_sensor:
+  # specchio interno del "Switch Input" del package (che non ha id): già con il suo debounce,
+  # e mi dà entrambi i fronti. Il package, con Relay Linking = Unlinked, non tocca il relè.
+  - platform: template
+    id: switch_input_mirror
+    internal: true
+    lambda: |-
+      if (!id(${wiz_input_id}).has_state()) return {};
+      return id(${wiz_input_id}).state != id(input_invert).state;
+    on_state:
+      then:
+        - lambda: |-
+            bool first = id(sw_last) < 0;
+            id(sw_last) = x ? 1 : 0;
+            if (first || !id(boot_done)) return;
+            id(input_event).trigger(x ? "premuto" : "rilasciato");
+            // senza clic multipli il "click" parte subito alla pressione, senza attendere 0,4 s
+            if (x && !id(multiclick_sw).state) id(input_event).trigger("click");
+            if (id(input_lock).state) return;   // ingresso bloccato: solo eventi, nessuna azione
+            // indice della modalità: 0 Flip, 1 Momentary, 2 Follow, 3 Activate, 4 Detached
+            const int m = id(input_mode_select).active_index().value_or(0);
+            int act = -1;                       // 0 commuta, 1 accendi, 2 spegni
+            if (m == 0) act = 0;
+            else if (m == 1) { if (x) act = 0; }
+            else if (m == 2) act = x ? 1 : 2;
+            else if (m == 3) { if (x) act = 1; }
+            if (act < 0) return;
+            // come lo Shelly: un comando di accensione a luce già accesa fa ripartire l'auto-off
+            if (act == 1 && id(light_on_sensor).state && id(auto_off_sw).state) id(tmr_arm).execute(1);
+            id(sw_action) = act;
+            id(sw_changed).execute();
+
+  - platform: template
+    name: "Failsafe attivo"
+    id: failsafe_active
+    web_server:
+      sorting_group_id: grp_wiz
+    device_class: problem
+    lambda: 'return id(failsafe_mode);'
+    on_press:
+      - lambda: |-
+          id(fs_count) += 1;
+          auto t = id(ha_time).now();
+          if (t.is_valid()) id(fs_last_epoch) = (uint32_t) t.timestamp;
+          id(fs_count_sensor).update();
+          id(fs_last_text).update();
+
+  - platform: template
+    name: "Wiz accesa (ultimo stato noto)"
+    id: wiz_lit_sensor
+    web_server:
+      sorting_group_id: grp_wiz
+    lambda: |-
+      for (int i = 0; i < id(wiz_n); i++) {
+        if (id(wiz_known)[i] && id(wiz_lit)[i]) return true;
+      }
+      return false;
+
+  # stato della luce come lo vede lo Shelly: in failsafe è il relè, altrimenti le Wiz
+  - platform: template
+    name: "Luce accesa"
+    id: light_on_sensor
+    lambda: 'return id(failsafe_mode) ? id(relay_1).state : id(wiz_lit_sensor).state;'
+    web_server:
+      sorting_group_id: grp_luce
+    on_press:
+      - lambda: |-
+          if (id(auto_off_sw).state) id(tmr_arm).execute(1);
+          else if (id(tmr_kind) == 2) id(tmr_cancel).execute();
+    on_release:
+      - lambda: |-
+          if (id(auto_on_sw).state) id(tmr_arm).execute(2);
+          else if (id(tmr_kind) == 1) id(tmr_cancel).execute();
+    on_state:
+      - lambda: 'if (id(pon_done)) id(light_last) = x;'
+
+  - platform: template
+    name: "Timer attivo"
+    id: tmr_active
+    icon: mdi:timer-sand
+    lambda: 'return id(tmr_kind) != 0;'
+    web_server:
+      sorting_group_id: grp_timer
+
   - platform: template
     name: "Sottoscrizione Wiz attiva"
     id: wiz_sub_active
@@ -161,38 +236,13 @@ binary_sensor:
     entity_category: diagnostic
     lambda: 'return id(wiz_lsock) != nullptr;'
     web_server:
-      sorting_group_id: grp_diag
-  # specchio di ${wiz_input_id} (id esposto dal package dalla v1.5.2), con l'inversione applicata
+      sorting_group_id: grp_wiz
+
+  # clic singolo/doppio/lungo come eventi per HA (utili soprattutto con un pulsante)
   - platform: template
-    id: sw1_mirror
+    id: sw_click
     internal: true
-    lambda: |-
-      if (!id(${wiz_input_id}).has_state()) return {};
-      return id(${wiz_input_id}).state != id(input1_invert).state;
-    on_state:
-      then:
-        - lambda: |-
-            bool first = id(sw1_last) < 0;
-            id(sw1_last) = x ? 1 : 0;
-            if (first || !id(boot_done)) return;
-            id(input1_event).trigger(x ? "premuto" : "rilasciato");
-            if (x && !id(multiclick1_sw).state) id(input1_event).trigger("click");
-            if (id(input1_lock).state) return;
-            // 0 Flip, 1 Momentary, 2 Follow, 3 Activate, 4 Detached
-            const int m = id(input1_mode_select).active_index().value_or(0);
-            int act = -1;
-            if (m == 0) act = 0;
-            else if (m == 1) { if (x) act = 0; }
-            else if (m == 2) act = x ? 1 : 2;
-            else if (m == 3) { if (x) act = 1; }
-            if (act < 0) return;
-            if (act == 1 && id(light1_on).state && id(auto_off1_sw).state) id(tmr1_arm).execute(1);
-            id(sw1_action) = act;
-            id(sw1_changed).execute();
-  - platform: template
-    id: sw1_click
-    internal: true
-    lambda: 'return id(sw1_mirror).state;'
+    lambda: 'return id(switch_input_mirror).state;'
     on_multi_click:
       - timing:
           - ON for at most 0.6s
@@ -200,68 +250,70 @@ binary_sensor:
           - ON for at most 0.6s
           - OFF for at least 0.3s
         then:
-          - lambda: 'if (id(multiclick1_sw).state) id(input1_event).trigger("doppio_click");'
+          - lambda: 'if (id(multiclick_sw).state) id(input_event).trigger("doppio_click");'
       - timing:
           - ON for at most 0.6s
           - OFF for at least 0.4s
         then:
-          - lambda: 'if (id(multiclick1_sw).state) id(input1_event).trigger("click");'
+          - lambda: 'if (id(multiclick_sw).state) id(input_event).trigger("click");'
       - timing:
           - ON for at least 1s
         then:
           - event.trigger:
-              id: input1_event
+              id: input_event
               event_type: pressione_lunga
-  - platform: template
-    name: "Failsafe attivo${wiz_sfx}"
-    id: fs1_active
-    device_class: problem
-    lambda: 'return id(fs1_mode);'
-    web_server:
-      sorting_group_id: grp_c1
-    on_press:
-      - lambda: |-
-          id(fs1_count) += 1;
-          auto t = id(ha_time).now();
-          if (t.is_valid()) id(fs1_last_epoch) = (uint32_t) t.timestamp;
-          id(fs1_count_sensor).update();
-          id(fs1_last_text).update();
-  - platform: template
-    name: "Wiz accese${wiz_sfx} (ultimo stato noto)"
-    id: wiz1_lit_sensor
-    lambda: |-
-      for (int i = 0; i < id(wiz1_n); i++) {
-        if (id(wiz1_known)[i] && id(wiz1_lit)[i]) return true;
-      }
-      return false;
-    web_server:
-      sorting_group_id: grp_c1
-  # stato della luce come lo vede lo Shelly: in failsafe è il relè, altrimenti le Wiz
-  - platform: template
-    name: "Luce accesa${wiz_sfx}"
-    id: light1_on
-    lambda: 'return id(fs1_mode) ? id(relay_1).state : id(wiz1_lit_sensor).state;'
-    web_server:
-      sorting_group_id: grp_c1
-    on_press:
-      - lambda: |-
-          if (id(auto_off1_sw).state) id(tmr1_arm).execute(1);
-          else if (id(tmr1_kind) == 2) id(tmr1_cancel).execute();
-    on_release:
-      - lambda: |-
-          if (id(auto_on1_sw).state) id(tmr1_arm).execute(2);
-          else if (id(tmr1_kind) == 1) id(tmr1_cancel).execute();
-    on_state:
-      - lambda: 'if (id(pon_done)) id(light1_last) = x;'
-  - platform: template
-    name: "Timer attivo${wiz_sfx}"
-    id: tmr1_active
-    icon: mdi:timer-sand
-    lambda: 'return id(tmr1_kind) != 0;'
-    web_server:
-      sorting_group_id: grp_c1
 
 sensor:
+  # quante lampade hanno risposto all'ultimo comando (si aggiorna solo quando cambia)
+  - platform: template
+    name: "Wiz raggiunte"
+    id: wiz_reach
+    web_server:
+      sorting_group_id: grp_wiz
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "Wiz configurate"
+    id: wiz_count
+    icon: mdi:lightbulb-group
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    update_interval: 60s
+    lambda: 'return (float) id(wiz_n);'
+    web_server:
+      sorting_group_id: grp_wiz
+  - platform: template
+    name: "Wiz tempo di risposta (max)"
+    icon: mdi:timer-outline
+    unit_of_measurement: ms
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    update_interval: 10s
+    lambda: |-
+      if (id(wiz_busy)) return {};
+      int m = -1;
+      for (int i = 0; i < id(wiz_n); i++) {
+        if (id(wiz_acked)[i] && (int) id(wiz_rtt)[i] > m) m = id(wiz_rtt)[i];
+      }
+      if (m < 0) return {};
+      return (float) m;
+    filters:
+      - delta: 1.0
+    web_server:
+      sorting_group_id: grp_wiz
+  - platform: template
+    name: "Failsafe: attivazioni"
+    id: fs_count_sensor
+    icon: mdi:counter
+    accuracy_decimals: 0
+    state_class: total_increasing
+    entity_category: diagnostic
+    update_interval: 60s
+    lambda: 'return (float) id(fs_count);'
+    web_server:
+      sorting_group_id: grp_wiz
   - platform: wifi_signal
     name: "Segnale WiFi"
     update_interval: 60s
@@ -273,50 +325,15 @@ sensor:
     entity_category: diagnostic
     web_server:
       sorting_group_id: grp_diag
-  - platform: template
-    name: "Wiz raggiunte${wiz_sfx}"
-    id: wiz1_reach
-    icon: mdi:lightbulb-group
-    accuracy_decimals: 0
-    entity_category: diagnostic
-    update_interval: never
-    web_server:
-      sorting_group_id: grp_c1
-  - platform: template
-    name: "Wiz tempo di risposta${wiz_sfx} (max)"
-    icon: mdi:timer-outline
-    unit_of_measurement: ms
-    accuracy_decimals: 0
-    entity_category: diagnostic
-    update_interval: 10s
-    lambda: |-
-      if (id(wiz1_busy)) return {};
-      int m = -1;
-      for (int i = 0; i < id(wiz1_n); i++) {
-        if (id(wiz1_acked)[i] && (int) id(wiz1_rtt)[i] > m) m = id(wiz1_rtt)[i];
-      }
-      if (m < 0) return {};
-      return (float) m;
-    filters:
-      - delta: 1.0
-    web_server:
-      sorting_group_id: grp_c1
-  - platform: template
-    name: "Failsafe attivazioni${wiz_sfx}"
-    id: fs1_count_sensor
-    icon: mdi:counter
-    accuracy_decimals: 0
-    state_class: total_increasing
-    entity_category: diagnostic
-    update_interval: 60s
-    lambda: 'return (float) id(fs1_count);'
-    web_server:
-      sorting_group_id: grp_c1
 
 script:
-  # comando UDP a tutte le Wiz del canale 1 (porta 38899), non bloccante.
+  # Un comando UDP a tutte le lampade (porta 38899), NON bloccante: invia subito, poi controlla le
+  # risposte ogni 15 ms lasciando girare il resto di ESPHome (API, BLE proxy, ESP-NOW).
   #   kind 0 = getPilot, 1 = setPilot acceso, 2 = setPilot spento
-  - id: wiz1_cmd
+  # Ogni retry_ms rimanda solo alle lampade che non hanno ancora risposto; finisce quando tutte
+  # hanno risposto oppure dopo deadline_ms. Un comando nuovo annulla quello in corso.
+  # Risultato: wiz_n_ok (quante hanno risposto), wiz_known / wiz_lit per lampada.
+  - id: wiz_cmd
     mode: restart
     parameters:
       kind: int
@@ -324,60 +341,66 @@ script:
       deadline_ms: int
     then:
       - lambda: |-
-          if (id(wiz1_n) == 0) {
+          // elenco IP letto una sola volta: "a.b.c.d,e.f.g.h,..." (massimo 8 lampade)
+          if (id(wiz_n) == 0) {
             const char *p = "${wiz_ips}";
             int n = 0;
             while (*p != 0 && n < 8) {
               unsigned a = 0, b = 0, c = 0, d = 0;
               int used = 0;
               if (sscanf(p, " %u.%u.%u.%u%n", &a, &b, &c, &d, &used) != 4) break;
-              id(wiz1_ip32)[n++] = (uint32_t) a | ((uint32_t) b << 8) | ((uint32_t) c << 16) | ((uint32_t) d << 24);
+              id(wiz_ip32)[n++] = (uint32_t) a | ((uint32_t) b << 8) | ((uint32_t) c << 16) | ((uint32_t) d << 24);
               p += used;
               while (*p == ',' || *p == ' ') p++;
             }
-            id(wiz1_n) = n;
+            id(wiz_n) = n;
           }
-          if (id(wiz1_sock) != nullptr) {
-            delete id(wiz1_sock);
-            id(wiz1_sock) = nullptr;
+          // un comando nuovo annulla quello in corso (se c'è): chiudo il suo socket
+          if (id(wiz_sock) != nullptr) {
+            delete id(wiz_sock);
+            id(wiz_sock) = nullptr;
           }
-          id(wiz1_busy) = false;
-          id(wiz1_n_ok) = 0;
+          id(wiz_busy) = false;
+          id(wiz_n_ok) = 0;
           auto s = socket::socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
-          if (!s || id(wiz1_n) == 0) {
-            ESP_LOGW("wiz1", "socket UDP non disponibile o nessun IP valido");
+          if (!s || id(wiz_n) == 0) {
+            ESP_LOGW("wiz", "socket UDP non disponibile o nessun IP valido in wiz_ips");
             return;
           }
           s->setblocking(false);
-          id(wiz1_sock) = s.release();
-          id(wiz1_kind) = kind;
-          id(wiz1_retry) = retry_ms;
-          id(wiz1_deadline) = deadline_ms;
-          id(wiz1_t0) = millis();
-          id(wiz1_next) = 0;
-          for (int i = 0; i < id(wiz1_n); i++) {
-            id(wiz1_acked)[i] = false;
-            id(wiz1_rtt)[i] = 0;
+          id(wiz_sock) = s.release();
+          id(wiz_kind) = kind;
+          id(wiz_retry) = retry_ms;
+          id(wiz_deadline) = deadline_ms;
+          id(wiz_t0) = millis();
+          id(wiz_next) = 0;
+          for (int i = 0; i < id(wiz_n); i++) {
+            id(wiz_acked)[i] = false;
+            id(wiz_rtt)[i] = 0;
+            // un comando di accensione/spegnimento aggiorna subito lo stato atteso, senza aspettare gli ack:
+            // così due azioni ravvicinate sull'interruttore si alternano correttamente
             if (kind > 0) {
-              id(wiz1_lit)[i] = (kind == 1);
-              id(wiz1_known)[i] = true;
+              id(wiz_lit)[i] = (kind == 1);
+              id(wiz_known)[i] = true;
             }
           }
-          id(wiz1_busy) = true;
+          id(wiz_busy) = true;
       - while:
           condition:
-            lambda: 'return id(wiz1_busy);'
+            lambda: 'return id(wiz_busy);'
           then:
             - lambda: |-
-                if (!id(wiz1_busy)) return;
-                if (id(wiz1_sock) == nullptr) {
-                  id(wiz1_busy) = false;
+                if (!id(wiz_busy)) return;
+                if (id(wiz_sock) == nullptr) {
+                  id(wiz_busy) = false;
                   return;
                 }
-                const int n = id(wiz1_n);
-                const int ck = id(wiz1_kind);
-                const uint32_t el = millis() - id(wiz1_t0);
-                if (el >= id(wiz1_next) && el < (uint32_t) id(wiz1_deadline)) {
+                const int n = id(wiz_n);
+                const int ck = id(wiz_kind);
+                const uint32_t el = millis() - id(wiz_t0);
+
+                // 1) (ri)invio, solo alle lampade che non hanno ancora risposto
+                if (el >= id(wiz_next) && el < (uint32_t) id(wiz_deadline)) {
                   int bri = (int) id(wiz_on_brightness).state;
                   if (bri < 10 || bri > 100) bri = 100;
                   int kel = (int) id(wiz_on_kelvin).state;
@@ -386,258 +409,298 @@ script:
                   snprintf(on_msg, sizeof(on_msg), "{\"method\":\"setPilot\",\"params\":{\"state\":true,\"dimming\":%d,\"temp\":%d}}", bri, kel);
                   const char *msg = ck == 0 ? R"({"method":"getPilot","params":{}})"
                                   : ck == 1 ? (const char *) on_msg
-                                            : R"({"method":"setPilot","params":{"state":false}})";
+                                              : R"({"method":"setPilot","params":{"state":false}})";
                   for (int i = 0; i < n; i++) {
-                    if (id(wiz1_acked)[i]) continue;
+                    if (id(wiz_acked)[i]) continue;
                     struct sockaddr_in d;
                     memset(&d, 0, sizeof(d));
                     d.sin_family = AF_INET;
                     d.sin_port = htons(38899);
-                    d.sin_addr.s_addr = id(wiz1_ip32)[i];
-                    id(wiz1_sock)->sendto(msg, strlen(msg), 0, (struct sockaddr *) &d, sizeof(d));
+                    d.sin_addr.s_addr = id(wiz_ip32)[i];
+                    id(wiz_sock)->sendto(msg, strlen(msg), 0, (struct sockaddr *) &d, sizeof(d));
                   }
-                  id(wiz1_next) += id(wiz1_retry);
+                  id(wiz_next) += id(wiz_retry);
                 }
+
+                // 2) risposte arrivate finora (lettura non bloccante); si riconosce la lampada dall'IP di origine
                 for (int guard = 0; guard < 24; guard++) {
                   char buf[400];
                   struct sockaddr_storage from;
                   socklen_t fl = sizeof(from);
-                  int r = id(wiz1_sock)->recvfrom(buf, sizeof(buf) - 1, (struct sockaddr *) &from, &fl);
+                  int r = id(wiz_sock)->recvfrom(buf, sizeof(buf) - 1, (struct sockaddr *) &from, &fl);
                   if (r <= 0) break;
                   buf[r] = 0;
                   if (from.ss_family != AF_INET) continue;
                   const uint32_t src = ((struct sockaddr_in *) &from)->sin_addr.s_addr;
                   int i = -1;
                   for (int j = 0; j < n; j++) {
-                    if (id(wiz1_ip32)[j] == src) { i = j; break; }
+                    if (id(wiz_ip32)[j] == src) { i = j; break; }
                   }
-                  if (i < 0 || id(wiz1_acked)[i]) continue;
+                  if (i < 0 || id(wiz_acked)[i]) continue;
                   if (ck == 0) {
                     if (strstr(buf, "getPilot") == nullptr) continue;
                     const char *p = strstr(buf, "\"state\":");
                     if (p == nullptr) continue;
-                    id(wiz1_lit)[i] = (p[8] == 't');
-                    id(wiz1_known)[i] = true;
+                    id(wiz_lit)[i] = (p[8] == 't');
+                    id(wiz_known)[i] = true;
                   } else {
                     if (strstr(buf, "setPilot") == nullptr || strstr(buf, "\"success\":true") == nullptr) continue;
-                    id(wiz1_lit)[i] = (ck == 1);
-                    id(wiz1_known)[i] = true;
+                    id(wiz_lit)[i] = (ck == 1);
+                    id(wiz_known)[i] = true;
                   }
-                  id(wiz1_acked)[i] = true;
-                  id(wiz1_rtt)[i] = (uint16_t) (el > 65000 ? 65000 : el);
+                  id(wiz_acked)[i] = true;
+                  id(wiz_rtt)[i] = (uint16_t) (el > 65000 ? 65000 : el);
                 }
+
+                // 3) fine: tutte hanno risposto, oppure scaduto il tempo massimo
                 int ok = 0;
                 unsigned slow = 0;
                 for (int i = 0; i < n; i++) {
-                  if (id(wiz1_acked)[i]) {
+                  if (id(wiz_acked)[i]) {
                     ok++;
-                    if (id(wiz1_rtt)[i] > slow) slow = id(wiz1_rtt)[i];
+                    if (id(wiz_rtt)[i] > slow) slow = id(wiz_rtt)[i];
                   }
                 }
-                if (ok == n || el >= (uint32_t) id(wiz1_deadline)) {
-                  id(wiz1_n_ok) = ok;
+                if (ok == n || el >= (uint32_t) id(wiz_deadline)) {
+                  id(wiz_n_ok) = ok;
                   const char *kn = ck == 0 ? "getPilot" : ck == 1 ? "setPilot ON" : "setPilot OFF";
                   if (ok < n) {
-                    char miss[128];
+                    char miss[96];
                     size_t l = 0;
                     miss[0] = 0;
                     for (int i = 0; i < n && l < sizeof(miss) - 18; i++) {
-                      if (id(wiz1_acked)[i]) continue;
-                      const uint32_t ip = id(wiz1_ip32)[i];
+                      if (id(wiz_acked)[i]) continue;
+                      const uint32_t ip = id(wiz_ip32)[i];
                       l += snprintf(miss + l, sizeof(miss) - l, "%u.%u.%u.%u ", (unsigned) (ip & 255), (unsigned) ((ip >> 8) & 255),
                                     (unsigned) ((ip >> 16) & 255), (unsigned) ((ip >> 24) & 255));
                     }
-                    if (ck == 0) ESP_LOGD("wiz1", "%s: %d/%d risposte in %u ms, mancano: %s", kn, ok, n, (unsigned) el, miss);
-                    else ESP_LOGW("wiz1", "%s: %d/%d risposte in %u ms, mancano: %s", kn, ok, n, (unsigned) el, miss);
+                    if (ck == 0) ESP_LOGD("wiz", "%s: %d/%d risposte in %u ms, mancano: %s", kn, ok, n, (unsigned) el, miss);
+                    else ESP_LOGW("wiz", "%s: %d/%d risposte in %u ms, mancano: %s", kn, ok, n, (unsigned) el, miss);
                   } else {
-                    if (ck == 0) ESP_LOGD("wiz1", "%s: %d/%d, la più lenta %u ms", kn, ok, n, slow);
-                    else ESP_LOGI("wiz1", "%s: %d/%d, la più lenta %u ms", kn, ok, n, slow);
+                    if (ck == 0) ESP_LOGD("wiz", "%s: %d/%d, la più lenta %u ms", kn, ok, n, slow);
+                    else ESP_LOGI("wiz", "%s: %d/%d, la più lenta %u ms", kn, ok, n, slow);
                   }
-                  if (!id(wiz1_reach).has_state() || id(wiz1_reach).state != (float) ok) id(wiz1_reach).publish_state((float) ok);
-                  delete id(wiz1_sock);
-                  id(wiz1_sock) = nullptr;
-                  id(wiz1_busy) = false;
+                  if (!id(wiz_reach).has_state() || id(wiz_reach).state != (float) ok) id(wiz_reach).publish_state((float) ok);
+                  delete id(wiz_sock);
+                  id(wiz_sock) = nullptr;
+                  id(wiz_busy) = false;
                 }
             - delay: 15ms
-  # azione su canale 1 (dall'interruttore, da HA, dal timer): Wiz se rispondono, altrimenti relè
-  - id: sw1_changed
+
+  - id: sw_changed
     mode: restart
     then:
       - if:
           condition:
-            lambda: 'return id(fs1_mode) || !id(relay_1).state;'
+            lambda: 'return id(failsafe_mode) || !id(relay_1).state;'
           then:
+            # failsafe, oppure relè già aperto: l'azione commuta il relè, senza aspettare nessuno
             - lambda: |-
-                if (!id(fs1_mode)) ESP_LOGW("wiz1", "relè aperto: passo in failsafe");
-                id(fs1_mode) = true;
-                if (id(sw1_action) == 1) id(relay_1).turn_on();
-                else if (id(sw1_action) == 2) id(relay_1).turn_off();
+                if (!id(failsafe_mode)) ESP_LOGW("wiz", "relè aperto: passo in failsafe");
+                id(failsafe_mode) = true;
+            - lambda: |-
+                if (id(sw_action) == 1) id(relay_1).turn_on();
+                else if (id(sw_action) == 2) id(relay_1).turn_off();
                 else id(relay_1).toggle();
           else:
+            # se non conosco ancora lo stato di nessuna lampada lo leggo adesso
             - if:
                 condition:
                   lambda: |-
-                    for (int i = 0; i < id(wiz1_n); i++) {
-                      if (id(wiz1_known)[i]) return false;
+                    for (int i = 0; i < id(wiz_n); i++) {
+                      if (id(wiz_known)[i]) return false;
                     }
                     return true;
                 then:
                   - script.execute:
-                      id: wiz1_cmd
+                      id: wiz_cmd
                       kind: 0
                       retry_ms: ${wiz_retry_ms}
                       deadline_ms: ${wiz_confirm_ms}
                   - wait_until:
                       condition:
-                        lambda: 'return !id(wiz1_busy);'
+                        lambda: 'return !id(wiz_busy);'
                       timeout: 5s
+            # toggle: se almeno una lampada è accesa le spengo tutte, altrimenti le accendo tutte
             - lambda: |-
                 bool any = false;
-                for (int i = 0; i < id(wiz1_n); i++) {
-                  if (id(wiz1_known)[i] && id(wiz1_lit)[i]) any = true;
+                for (int i = 0; i < id(wiz_n); i++) {
+                  if (id(wiz_known)[i] && id(wiz_lit)[i]) any = true;
                 }
-                id(want1_on) = id(sw1_action) == 1 ? true : (id(sw1_action) == 2 ? false : !any);
+                id(want_on) = id(sw_action) == 1 ? true : (id(sw_action) == 2 ? false : !any);
             - script.execute:
-                id: wiz1_cmd
-                kind: !lambda 'return id(want1_on) ? 1 : 2;'
+                id: wiz_cmd
+                kind: !lambda 'return id(want_on) ? 1 : 2;'
                 retry_ms: ${wiz_retry_ms}
                 deadline_ms: ${wiz_deadline_ms}
             - wait_until:
                 condition:
-                  lambda: 'return !id(wiz1_busy);'
+                  lambda: 'return !id(wiz_busy);'
                 timeout: 5s
+            # troppo poche risposte: prima di arrendermi chiedo lo stato (se rispondono, è solo un comando perso)
             - if:
                 condition:
-                  lambda: 'return id(wiz1_n_ok) < std::max(1, std::min((int) id(quorum1_num).state, id(wiz1_n)));'
+                  lambda: 'return id(wiz_n_ok) < std::max(1, std::min(${wiz_quorum}, id(wiz_n)));'
                 then:
                   - script.execute:
-                      id: wiz1_cmd
+                      id: wiz_cmd
                       kind: 0
                       retry_ms: ${wiz_retry_ms}
                       deadline_ms: ${wiz_confirm_ms}
                   - wait_until:
                       condition:
-                        lambda: 'return !id(wiz1_busy);'
+                        lambda: 'return !id(wiz_busy);'
                       timeout: 5s
-            - if:
-                condition:
-                  lambda: 'return id(wiz1_n_ok) < std::max(1, std::min((int) id(quorum1_num).state, id(wiz1_n)));'
-                then:
-                  - lambda: |-
-                      ESP_LOGW("wiz1", "Wiz non rispondono (%d, minimo %d): failsafe", id(wiz1_n_ok), std::max(1, std::min((int) id(quorum1_num).state, id(wiz1_n))));
-                      id(fs1_mode) = true;
                   - if:
                       condition:
-                        lambda: 'return id(want1_on);'
+                        lambda: 'return id(wiz_n_ok) >= std::max(1, std::min(${wiz_quorum}, id(wiz_n)));'
                       then:
+                        - lambda: 'ESP_LOGW("wiz", "comando senza ack sufficienti ma le Wiz rispondono (%d): nessun failsafe", id(wiz_n_ok));'
+            - if:
+                condition:
+                  lambda: 'return id(wiz_n_ok) < std::max(1, std::min(${wiz_quorum}, id(wiz_n)));'
+                then:
+                  - lambda: |-
+                      ESP_LOGW("wiz", "Wiz non risponde (%d, minimo %d): failsafe", id(wiz_n_ok), std::max(1, std::min(${wiz_quorum}, id(wiz_n))));
+                      id(failsafe_mode) = true;
+                  - if:
+                      condition:
+                        lambda: 'return id(want_on);'
+                      then:
+                        # accendi: se il relè è già chiuso le Wiz possono essere bloccate, quindi riavvio l'alimentazione
+                        - if:
+                            condition:
+                              lambda: 'return ${powercycle_ms} > 0 && id(relay_1).state;'
+                            then:
+                              - switch.turn_off: relay_1
+                              - delay: ${powercycle_ms}ms
                         - switch.turn_on: relay_1
                       else:
                         - switch.turn_off: relay_1
-  - id: tmr1_arm
+
+  # timer: kind 1 = auto-off, 2 = auto-on (come switch.auto_off / auto_on dello Shelly)
+  - id: tmr_arm
     parameters:
       kind: int
     then:
       - lambda: |-
-          const float secs = kind == 1 ? id(auto_off1_delay).state : id(auto_on1_delay).state;
-          id(tmr1_kind) = kind;
-          id(tmr1_end) = millis() + (uint32_t) (secs * 1000.0f);
+          const float secs = kind == 1 ? id(auto_off_delay).state : id(auto_on_delay).state;
+          id(tmr_kind) = kind;
+          id(tmr_end) = millis() + (uint32_t) (secs * 1000.0f);
           auto t = id(ha_time).now();
-          if (t.is_valid()) id(tmr1_end_text).publish_state(ESPTime::from_epoch_local(t.timestamp + (time_t) secs).strftime("%H:%M:%S"));
-          else id(tmr1_end_text).publish_state("tra " + to_string((int) secs) + " s");
-          ESP_LOGI("timer1", "%s tra %d s", kind == 1 ? "auto-off" : "auto-on", (int) secs);
-  - id: tmr1_cancel
+          if (t.is_valid()) id(tmr_end_text).publish_state(ESPTime::from_epoch_local(t.timestamp + (time_t) secs).strftime("%H:%M:%S"));
+          else id(tmr_end_text).publish_state("tra " + to_string((int) secs) + " s");
+          ESP_LOGI("timer", "%s tra %d s", kind == 1 ? "auto-off" : "auto-on", (int) secs);
+  - id: tmr_cancel
     then:
       - lambda: |-
-          if (id(tmr1_kind) != 0) ESP_LOGI("timer1", "timer annullato");
-          id(tmr1_kind) = 0;
-          id(tmr1_end_text).publish_state("-");
+          if (id(tmr_kind) != 0) ESP_LOGI("timer", "timer annullato");
+          id(tmr_kind) = 0;
+          id(tmr_end_text).publish_state("-");
+
+esp32:
+  framework:
+    sdkconfig_options:
+      # socket per le Wiz: uno per i comandi e uno in ascolto per la sottoscrizione. Margine rispetto al calcolo automatico
+      CONFIG_LWIP_MAX_SOCKETS: "20"
 
 interval:
-  # sottoscrizione agli aggiornamenti delle Wiz (come fa HA) e lettura dei loro messaggi
+  # sottoscrizione agli aggiornamenti di stato delle Wiz (vedi wiz_listen)
   - interval: 25ms
     then:
       - lambda: |-
-          if (!id(boot_done) || !(id(wiz1_n) > 0)) return;
-          const uint32_t now = millis();
-          static uint32_t retry_at = 0;
-          if (id(wiz_lsock) == nullptr) {
-            if ((int32_t) (now - retry_at) < 0) return;
-            retry_at = now + 10000;
-            uint32_t me = 0;
-            for (auto &ip : wifi::global_wifi_component->wifi_sta_ip_addresses()) {
-              if (!ip.is_ip4()) continue;
-              char ipb[network::IP_ADDRESS_BUFFER_SIZE];
-              ip.str_to(ipb);
-              unsigned o[4];
-              if (sscanf(ipb, "%u.%u.%u.%u", &o[0], &o[1], &o[2], &o[3]) == 4 && (o[0] | o[1] | o[2] | o[3]) != 0) {
-                me = (uint32_t) o[0] | ((uint32_t) o[1] << 8) | ((uint32_t) o[2] << 16) | ((uint32_t) o[3] << 24);
-                break;
-              }
-            }
-            auto s = socket::socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
-            struct sockaddr_in b;
-            memset(&b, 0, sizeof(b));
-            b.sin_family = AF_INET;
-            b.sin_port = htons(38900);
-            b.sin_addr.s_addr = htonl(INADDR_ANY);
-            if (!s || me == 0 || s->bind((struct sockaddr *) &b, sizeof(b)) != 0) {
-              ESP_LOGW("wiz", "sottoscrizione non attiva: %s, riprovo tra 10 s", me == 0 ? "IP locale non disponibile" : "socket di ascolto non disponibile");
-              return;
-            }
-            s->setblocking(false);
-            id(wiz_lsock) = s.release();
-            id(wiz_myip) = me;
-            id(wiz_reg_t) = now - 20000;
-            ESP_LOGI("wiz", "sottoscrizione attiva: ascolto sulla porta 38900");
-          }
-          if (now - id(wiz_reg_t) >= 20000) {
-            id(wiz_reg_t) = now;
-            const uint32_t me = id(wiz_myip);
-            char msg[200];
-            snprintf(msg, sizeof(msg),
-                     "{\"method\":\"registration\",\"params\":{\"phoneIp\":\"%u.%u.%u.%u\",\"register\":true,\"phoneMac\":\"02%02x%02x%02x%02x00\"}}",
-                     (unsigned) (me & 255), (unsigned) ((me >> 8) & 255), (unsigned) ((me >> 16) & 255), (unsigned) ((me >> 24) & 255),
-                     (unsigned) (me & 255), (unsigned) ((me >> 8) & 255), (unsigned) ((me >> 16) & 255), (unsigned) ((me >> 24) & 255));
-            struct sockaddr_in d;
-            memset(&d, 0, sizeof(d));
-            d.sin_family = AF_INET;
-            d.sin_port = htons(38899);
-              for (int i = 0; i < id(wiz1_n); i++) {
-                d.sin_addr.s_addr = id(wiz1_ip32)[i];
-                id(wiz_lsock)->sendto(msg, strlen(msg), 0, (struct sockaddr *) &d, sizeof(d));
-              }
-          }
-          for (int guard = 0; guard < 24; guard++) {
-            char buf[500];
-            struct sockaddr_storage from;
-            socklen_t fl = sizeof(from);
-            int r = id(wiz_lsock)->recvfrom(buf, sizeof(buf) - 1, (struct sockaddr *) &from, &fl);
-            if (r <= 0) break;
-            buf[r] = 0;
-            if (from.ss_family != AF_INET) continue;
-            const uint32_t src = ((struct sockaddr_in *) &from)->sin_addr.s_addr;
-            const bool reg = strstr(buf, "\"method\":\"registration\"") != nullptr;
-            if (reg && strstr(buf, "\"success\":true") == nullptr) ESP_LOGW("wiz", "registrazione rifiutata da una Wiz");
-            bool st = false;
-            if (!reg) {
-              if (strstr(buf, "\"method\":\"syncPilot\"") == nullptr) continue;
-              const char *p = strstr(buf, "\"state\":");
-              if (p == nullptr) continue;
-              st = (p[8] == 't');
-            }
-            for (int j = 0; j < id(wiz1_n); j++) {
-              if (id(wiz1_ip32)[j] == src) {
-                id(wiz1_seen)[j] = now;
-                if (reg) break;
-                if (id(wiz1_busy) && id(wiz1_kind) > 0 && !id(wiz1_acked)[j]) break;
-                if (id(wiz1_known)[j] && id(wiz1_lit)[j] != st) ESP_LOGI("wiz1", "Wiz %d cambiata dall'esterno: ora %s", j + 1, st ? "accesa" : "spenta");
-                id(wiz1_lit)[j] = st;
-                id(wiz1_known)[j] = true;
-                break;
-              }
-            }
-          }
-  # all'avvio: ingressi scollegati dai relè, stato iniziale delle Wiz
+                // Sottoscrizione agli aggiornamenti delle Wiz, come fa Home Assistant (pywizlight):
+                // ci si registra con "registration" (rinnovata ogni 20 s) e le lampade mandano "syncPilot"
+                // alla porta UDP 38900 ad ogni cambio di stato e come heartbeat. Così lo stato noto è sempre
+                // aggiornato, anche per i cambi fatti da HA, dall'app o da Alexa.
+                if (!id(boot_done) || id(wiz_n) == 0) return;
+                const uint32_t now = millis();
+                static uint32_t retry_at = 0;
+
+                // 1) socket di ascolto (porta 38900), creato una volta sola
+                if (id(wiz_lsock) == nullptr) {
+                  if ((int32_t) (now - retry_at) < 0) return;
+                  retry_at = now + 10000;
+                  // il mio IPv4 dal componente WiFi (con lwIP getsockname() su un socket UDP non legato dà 0.0.0.0)
+                  uint32_t me = 0;
+                  for (auto &ip : wifi::global_wifi_component->wifi_sta_ip_addresses()) {
+                    if (!ip.is_ip4()) continue;
+                    char ipb[network::IP_ADDRESS_BUFFER_SIZE];
+                    ip.str_to(ipb);
+                    unsigned o[4];
+                    if (sscanf(ipb, "%u.%u.%u.%u", &o[0], &o[1], &o[2], &o[3]) == 4 && (o[0] | o[1] | o[2] | o[3]) != 0) {
+                      me = (uint32_t) o[0] | ((uint32_t) o[1] << 8) | ((uint32_t) o[2] << 16) | ((uint32_t) o[3] << 24);
+                      break;
+                    }
+                  }
+                  auto s = socket::socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+                  struct sockaddr_in b;
+                  memset(&b, 0, sizeof(b));
+                  b.sin_family = AF_INET;
+                  b.sin_port = htons(38900);
+                  b.sin_addr.s_addr = htonl(INADDR_ANY);
+                  if (!s || me == 0 || s->bind((struct sockaddr *) &b, sizeof(b)) != 0) {
+                    ESP_LOGW("wiz", "sottoscrizione non attiva: %s, riprovo tra 10 s", me == 0 ? "IP locale non disponibile" : "socket di ascolto non disponibile");
+                    return;
+                  }
+                  s->setblocking(false);
+                  id(wiz_lsock) = s.release();
+                  id(wiz_myip) = me;
+                  id(wiz_reg_t) = now - 20000;  // registra subito
+                  ESP_LOGI("wiz", "sottoscrizione attiva: ascolto sulla porta 38900");
+                }
+
+                // 2) (ri)registrazione ogni 20 s a tutte le lampade
+                if (now - id(wiz_reg_t) >= 20000) {
+                  id(wiz_reg_t) = now;
+                  const uint32_t me = id(wiz_myip);
+                  char msg[200];
+                  snprintf(msg, sizeof(msg),
+                           "{\"method\":\"registration\",\"params\":{\"phoneIp\":\"%u.%u.%u.%u\",\"register\":true,\"phoneMac\":\"02%02x%02x%02x%02x00\"}}",
+                           (unsigned) (me & 255), (unsigned) ((me >> 8) & 255), (unsigned) ((me >> 16) & 255), (unsigned) ((me >> 24) & 255),
+                           (unsigned) (me & 255), (unsigned) ((me >> 8) & 255), (unsigned) ((me >> 16) & 255), (unsigned) ((me >> 24) & 255));
+                  for (int i = 0; i < id(wiz_n); i++) {
+                    struct sockaddr_in d;
+                    memset(&d, 0, sizeof(d));
+                    d.sin_family = AF_INET;
+                    d.sin_port = htons(38899);
+                    d.sin_addr.s_addr = id(wiz_ip32)[i];
+                    id(wiz_lsock)->sendto(msg, strlen(msg), 0, (struct sockaddr *) &d, sizeof(d));
+                  }
+                }
+
+                // 3) messaggi arrivati (lettura non bloccante)
+                for (int guard = 0; guard < 24; guard++) {
+                  char buf[500];
+                  struct sockaddr_storage from;
+                  socklen_t fl = sizeof(from);
+                  int r = id(wiz_lsock)->recvfrom(buf, sizeof(buf) - 1, (struct sockaddr *) &from, &fl);
+                  if (r <= 0) break;
+                  buf[r] = 0;
+                  if (from.ss_family != AF_INET) continue;
+                  const uint32_t src = ((struct sockaddr_in *) &from)->sin_addr.s_addr;
+                  int i = -1;
+                  for (int j = 0; j < id(wiz_n); j++) {
+                    if (id(wiz_ip32)[j] == src) { i = j; break; }
+                  }
+                  if (i < 0) continue;
+                  id(wiz_seen)[i] = now;
+                  if (strstr(buf, "\"method\":\"registration\"") != nullptr) {
+                    if (strstr(buf, "\"success\":true") == nullptr) ESP_LOGW("wiz", "registrazione rifiutata dalla Wiz %d", i + 1);
+                    continue;
+                  }
+                  if (strstr(buf, "\"method\":\"syncPilot\"") == nullptr) continue;
+                  const char *p = strstr(buf, "\"state\":");
+                  if (p == nullptr) continue;
+                  // un comando in corso per questa lampada: lo stato atteso vale più di un messaggio che può essere precedente
+                  if (id(wiz_busy) && id(wiz_kind) > 0 && !id(wiz_acked)[i]) continue;
+                  const bool st = (p[8] == 't');
+                  if (id(wiz_known)[i] && id(wiz_lit)[i] != st) ESP_LOGI("wiz", "Wiz %d cambiata dall'esterno: ora %s", i + 1, st ? "accesa" : "spenta");
+                  id(wiz_lit)[i] = st;
+                  id(wiz_known)[i] = true;
+                }
+
+  # primo secondo dopo l'avvio: forza Relay Linking = Unlinked e legge lo stato iniziale
   - interval: 1s
     then:
       - if:
@@ -647,171 +710,186 @@ interval:
             - select.set:
                 id: relay_linking_select
                 option: "Unlinked"
-            - lambda: 'id(boot_done) = true;'
             - lambda: |-
-                id(sw1_last) = id(sw1_mirror).state ? 1 : 0;
-                if (!id(relay_1).state || id(failsafe1_forced).state) id(fs1_mode) = true;
-            - script.execute:
-                id: wiz1_cmd
-                kind: 0
-                retry_ms: ${wiz_retry_ms}
-                deadline_ms: ${wiz_confirm_ms}
-  # timer auto-off / auto-on del canale
-  - interval: 250ms
-    then:
-      - lambda: |-
-          if (id(tmr1_kind) != 0 && (int32_t) (millis() - id(tmr1_end)) >= 0) {
-            const int k = id(tmr1_kind);
-            id(tmr1_kind) = 0;
-            id(tmr1_end_text).publish_state("-");
-            ESP_LOGI("timer1", "%s scaduto", k == 1 ? "auto-off" : "auto-on");
-            id(sw1_action) = k == 1 ? 2 : 1;
-            id(sw1_changed).execute();
-          }
-  # stato delle luci dopo un'interruzione di corrente (solo accensione/brownout, non dopo riavvio software/OTA)
-  - interval: 1s
-    then:
-      - lambda: |-
-          if (id(pon_done) || !id(boot_done) || millis() < 15000 || id(wiz1_busy)) return;
-          id(pon_done) = true;
-          const bool before1 = id(light1_last);
-          id(light1_last) = id(light1_on).state;
-          const auto rr = esp_reset_reason();
-          if (rr != ESP_RST_POWERON && rr != ESP_RST_BROWNOUT) return;
-          {
-            const int m = id(power_on1_select).active_index().value_or(2);
-            const bool want = m == 0 ? false : m == 1 ? true : m == 2 ? before1 : id(sw1_last) == 1;
-            ESP_LOGI("boot", "canale 1 dopo interruzione: luce %s", want ? "accesa" : "spenta");
-            if (want != id(light1_on).state) {
-              id(sw1_action) = want ? 1 : 2;
-              id(sw1_changed).execute();
-            }
-          }
-  # canale 1: rilettura periodica (normale) e tentativo di uscita dal failsafe
+                id(boot_done) = true;
+                id(sw_last) = id(switch_input_mirror).state ? 1 : 0;
+                // relè aperto all'avvio: non so in che stato sono le Wiz, si parte in failsafe
+                if (!id(relay_1).state) id(failsafe_mode) = true;
+            # relè chiuso: leggo subito lo stato delle lampade (sola lettura, non cambia nulla)
+            - if:
+                condition:
+                  lambda: 'return id(relay_1).state;'
+                then:
+                  - script.execute:
+                      id: wiz_cmd
+                      kind: 0
+                      retry_ms: ${wiz_retry_ms}
+                      deadline_ms: ${wiz_confirm_ms}
+
+  # Wiz raggiungibili: tiene aggiornato lo stato noto (cambiato da app, HA, Alexa...)
   - interval: ${poll_interval}
     then:
       - if:
           condition:
-            lambda: 'return id(boot_done) && !id(fs1_mode) && id(relay_1).state && !id(wiz1_busy);'
+            lambda: 'return id(boot_done) && !id(failsafe_mode) && id(relay_1).state && !id(wiz_busy);'
           then:
             - script.execute:
-                id: wiz1_cmd
+                id: wiz_cmd
                 kind: 0
                 retry_ms: ${wiz_retry_ms}
                 deadline_ms: ${wiz_confirm_ms}
+
+  # in failsafe con relè chiuso (= luce accesa): le Wiz sono tornate? Se sì le accendo e esco dal failsafe
   - interval: ${health_check_interval}
     then:
       - if:
           condition:
-            lambda: 'return id(boot_done) && id(fs1_mode) && !id(failsafe1_forced).state && id(relay_1).state && !id(wiz1_busy);'
+            lambda: 'return id(boot_done) && id(failsafe_mode) && id(relay_1).state && !id(wiz_busy);'
           then:
             - script.execute:
-                id: wiz1_cmd
+                id: wiz_cmd
                 kind: 1
                 retry_ms: ${wiz_retry_ms}
                 deadline_ms: ${wiz_deadline_ms}
             - wait_until:
                 condition:
-                  lambda: 'return !id(wiz1_busy);'
+                  lambda: 'return !id(wiz_busy);'
                 timeout: 5s
             - if:
                 condition:
-                  lambda: 'return id(wiz1_n_ok) >= std::max(1, std::min((int) id(quorum1_num).state, id(wiz1_n)));'
+                  lambda: 'return id(wiz_n_ok) >= std::max(1, std::min(${wiz_quorum}, id(wiz_n)));'
                 then:
                   - lambda: |-
-                      ESP_LOGI("wiz1", "Wiz di nuovo raggiungibili: esco dal failsafe");
-                      id(fs1_mode) = false;
+                      ESP_LOGI("wiz", "Wiz di nuovo raggiungibili: esco dal failsafe");
+                      if (!id(failsafe_forced).state) id(failsafe_mode) = false;
 
+  # timer auto-off / auto-on: alla scadenza passa dalla stessa logica dell'interruttore (Wiz o failsafe)
+  - interval: 250ms
+    then:
+      - lambda: |-
+          if (id(tmr_kind) == 0 || (int32_t) (millis() - id(tmr_end)) < 0) return;
+          const int k = id(tmr_kind);
+          id(tmr_kind) = 0;
+          id(tmr_end_text).publish_state("-");
+          ESP_LOGI("timer", "%s scaduto", k == 1 ? "auto-off" : "auto-on");
+          id(sw_action) = k == 1 ? 2 : 1;
+          id(sw_changed).execute();
+
+  # stato della luce dopo un'interruzione di corrente: solo accensione/brownout, non dopo un riavvio software o OTA.
+  # Aspetta 15 s perché le Wiz tornino in rete.
+  - interval: 1s
+    then:
+      - lambda: |-
+          if (id(pon_done) || !id(boot_done) || millis() < 15000 || id(wiz_busy)) return;
+          id(pon_done) = true;
+          const bool before = id(light_last);            // stato prima dello spegnimento
+          id(light_last) = id(light_on_sensor).state;
+          const auto rr = esp_reset_reason();
+          if (rr != ESP_RST_POWERON && rr != ESP_RST_BROWNOUT) return;
+          // 0 Spenta, 1 Accesa, 2 Ultimo stato, 3 Segui interruttore
+          const int m = id(power_on_select).active_index().value_or(2);
+          const bool want = m == 0 ? false : m == 1 ? true : m == 2 ? before : id(sw_last) == 1;
+          ESP_LOGI("boot", "accensione dopo interruzione: luce %s", want ? "accesa" : "spenta");
+          if (want == id(light_on_sensor).state) return;
+          id(sw_action) = want ? 1 : 2;
+          id(sw_changed).execute();
+
+
+# Luce: la stessa logica dell'interruttore fisico (Wiz, e failsafe sul relè se non rispondono), comandabile da HA
 switch:
   - platform: template
-    name: "Luce${wiz_sfx}"
-    id: light1_switch
+    name: "Luce"
+    id: light_switch
     icon: mdi:lightbulb
-    lambda: 'return id(light1_on).state;'
-    restore_mode: DISABLED
+    lambda: 'return id(light_on_sensor).state;'
+    restore_mode: DISABLED      # nessuna azione all'avvio
     turn_on_action:
       - lambda: |-
           if (!id(boot_done)) return;
-          if (id(light1_on).state && id(auto_off1_sw).state) id(tmr1_arm).execute(1);
-          id(sw1_action) = 1;
-          id(sw1_changed).execute();
+          if (id(light_on_sensor).state && id(auto_off_sw).state) id(tmr_arm).execute(1);
+          id(sw_action) = 1;
+          id(sw_changed).execute();
     turn_off_action:
       - lambda: |-
           if (!id(boot_done)) return;
-          id(sw1_action) = 2;
-          id(sw1_changed).execute();
+          id(sw_action) = 2;
+          id(sw_changed).execute();
     web_server:
-      sorting_group_id: grp_c1
+      sorting_group_id: grp_luce
+
   - platform: template
-    name: "Auto-off${wiz_sfx}"
-    id: auto_off1_sw
+    name: "Auto-off"
+    id: auto_off_sw
     icon: mdi:timer-off-outline
     entity_category: config
     optimistic: true
     restore_mode: RESTORE_DEFAULT_OFF
     turn_off_action:
-      - lambda: 'if (id(tmr1_kind) == 1) id(tmr1_cancel).execute();'
+      - lambda: 'if (id(tmr_kind) == 1) id(tmr_cancel).execute();'
     web_server:
-      sorting_group_id: grp_c1
+      sorting_group_id: grp_timer
   - platform: template
-    name: "Auto-on${wiz_sfx}"
-    id: auto_on1_sw
+    name: "Auto-on"
+    id: auto_on_sw
     icon: mdi:timer-outline
     entity_category: config
     optimistic: true
     restore_mode: RESTORE_DEFAULT_OFF
     turn_off_action:
-      - lambda: 'if (id(tmr1_kind) == 2) id(tmr1_cancel).execute();'
+      - lambda: 'if (id(tmr_kind) == 2) id(tmr_cancel).execute();'
     web_server:
-      sorting_group_id: grp_c1
+      sorting_group_id: grp_timer
+
   - platform: template
-    name: "Riconosci clic multipli${wiz_sfx}"
-    id: multiclick1_sw
+    name: "Riconosci clic multipli"
+    id: multiclick_sw
     icon: mdi:gesture-double-tap
     entity_category: config
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
     web_server:
-      sorting_group_id: grp_c1
+      sorting_group_id: grp_ingresso
   - platform: template
-    name: "Blocca ingresso${wiz_sfx}"
-    id: input1_lock
+    name: "Blocca ingresso"
+    id: input_lock
     icon: mdi:lock
     entity_category: config
     optimistic: true
     restore_mode: RESTORE_DEFAULT_OFF
     web_server:
-      sorting_group_id: grp_c1
+      sorting_group_id: grp_ingresso
   - platform: template
-    name: "Inverti ingresso${wiz_sfx}"
-    id: input1_invert
+    name: "Inverti ingresso"
+    id: input_invert
     icon: mdi:swap-vertical
     entity_category: config
     optimistic: true
     restore_mode: RESTORE_DEFAULT_OFF
+    # il cambio di inversione fa cambiare lo specchio: quel cambio non deve commutare la luce
     turn_on_action:
-      - lambda: 'id(sw1_last) = -1;'
+      - lambda: 'id(sw_last) = -1;'
     turn_off_action:
-      - lambda: 'id(sw1_last) = -1;'
+      - lambda: 'id(sw_last) = -1;'
     web_server:
-      sorting_group_id: grp_c1
+      sorting_group_id: grp_ingresso
+
   - platform: template
-    name: "Failsafe forzato${wiz_sfx}"
-    id: failsafe1_forced
+    name: "Failsafe forzato"
+    id: failsafe_forced
     icon: mdi:shield-alert
     entity_category: config
     optimistic: true
     restore_mode: RESTORE_DEFAULT_OFF
     turn_on_action:
       - lambda: |-
-          ESP_LOGW("wiz1", "failsafe forzato");
-          id(fs1_mode) = true;
+          ESP_LOGW("wiz", "failsafe forzato da HA");
+          id(failsafe_mode) = true;
     web_server:
-      sorting_group_id: grp_c1
+      sorting_group_id: grp_wiz
 
 number:
   - platform: template
-    name: "Luminosità accensione${wiz_sfx}"
+    name: "Luminosità accensione"
     id: wiz_on_brightness
     icon: mdi:brightness-6
     entity_category: config
@@ -824,10 +902,10 @@ number:
     restore_value: true
     initial_value: 100
     web_server:
-      sorting_group_id: grp_c1
+      sorting_group_id: grp_wiz
       sorting_weight: 60
   - platform: template
-    name: "Temperatura colore accensione${wiz_sfx}"
+    name: "Temperatura colore accensione"
     id: wiz_on_kelvin
     icon: mdi:thermometer
     entity_category: config
@@ -840,11 +918,11 @@ number:
     restore_value: true
     initial_value: 2700
     web_server:
-      sorting_group_id: grp_c1
+      sorting_group_id: grp_wiz
       sorting_weight: 61
   - platform: template
-    name: "Auto-off ritardo${wiz_sfx}"
-    id: auto_off1_delay
+    name: "Auto-off ritardo"
+    id: auto_off_delay
     icon: mdi:timer-cog-outline
     entity_category: config
     unit_of_measurement: s
@@ -856,10 +934,10 @@ number:
     restore_value: true
     initial_value: 60
     web_server:
-      sorting_group_id: grp_c1
+      sorting_group_id: grp_timer
   - platform: template
-    name: "Auto-on ritardo${wiz_sfx}"
-    id: auto_on1_delay
+    name: "Auto-on ritardo"
+    id: auto_on_delay
     icon: mdi:timer-cog-outline
     entity_category: config
     unit_of_measurement: s
@@ -871,10 +949,10 @@ number:
     restore_value: true
     initial_value: 60
     web_server:
-      sorting_group_id: grp_c1
+      sorting_group_id: grp_timer
   - platform: template
-    name: "Quorum Wiz${wiz_sfx}"
-    id: quorum1_num
+    name: "Quorum Wiz"
+    id: wiz_quorum_num
     icon: mdi:vote
     entity_category: config
     min_value: 1
@@ -883,41 +961,40 @@ number:
     mode: box
     optimistic: true
     restore_value: true
-    initial_value: 3
+    initial_value: 2
     web_server:
-      sorting_group_id: grp_c1
-
+      sorting_group_id: grp_wiz
 
 text_sensor:
   - platform: template
-    name: "Timer${wiz_sfx} scade alle"
-    id: tmr1_end_text
+    name: "Timer: scade alle"
+    id: tmr_end_text
     icon: mdi:clock-end
     update_interval: 60s
     lambda: |-
-      if (id(tmr1_kind) != 0) return {};
+      if (id(tmr_kind) != 0) return {};
       return {"-"};
     web_server:
-      sorting_group_id: grp_c1
+      sorting_group_id: grp_timer
   - platform: template
-    name: "Failsafe ultima attivazione${wiz_sfx}"
-    id: fs1_last_text
+    name: "Failsafe: ultima attivazione"
+    id: fs_last_text
     icon: mdi:history
     entity_category: diagnostic
     update_interval: 60s
     lambda: |-
-      if (id(fs1_last_epoch) == 0) return {"mai"};
-      return ESPTime::from_epoch_local(id(fs1_last_epoch)).strftime("%d/%m/%Y %H:%M:%S");
+      if (id(fs_last_epoch) == 0) return {"mai"};
+      return ESPTime::from_epoch_local(id(fs_last_epoch)).strftime("%d/%m/%Y %H:%M:%S");
     web_server:
-      sorting_group_id: grp_c1
+      sorting_group_id: grp_wiz
   - platform: template
-    name: "IP Wiz${wiz_sfx}"
+    name: "IP Wiz"
     icon: mdi:ip-network
     entity_category: diagnostic
     update_interval: 1h
     lambda: 'return {"${wiz_ips}"};'
     web_server:
-      sorting_group_id: grp_c1
+      sorting_group_id: grp_wiz
   - platform: wifi_info
     ip_address:
       name: "IP"
@@ -943,8 +1020,8 @@ text_sensor:
 
 event:
   - platform: template
-    name: "Ingresso${wiz_sfx}"
-    id: input1_event
+    name: "Ingresso"
+    id: input_event
     device_class: button
     event_types:
       - premuto
@@ -953,7 +1030,7 @@ event:
       - doppio_click
       - pressione_lunga
     web_server:
-      sorting_group_id: grp_c1
+      sorting_group_id: grp_ingresso
 
 button:
   - platform: safe_mode
@@ -969,9 +1046,18 @@ time:
 web_server:
   version: 3
   sorting_groups:
-    - id: grp_c1
+    - id: grp_luce
       name: "${wiz_group_name}"
       sorting_weight: 10
+    - id: grp_ingresso
+      name: "Ingresso"
+      sorting_weight: 20
+    - id: grp_timer
+      name: "Timer"
+      sorting_weight: 30
+    - id: grp_wiz
+      name: "Wiz e failsafe"
+      sorting_weight: 40
     - id: grp_diag
       name: "Diagnostica"
       sorting_weight: 90
