@@ -825,6 +825,7 @@ number:
     initial_value: 100
     web_server:
       sorting_group_id: grp_c1
+      sorting_weight: 60
   - platform: template
     name: "Temperatura colore accensione${wiz_sfx}"
     id: wiz_on_kelvin
@@ -840,6 +841,7 @@ number:
     initial_value: 2700
     web_server:
       sorting_group_id: grp_c1
+      sorting_weight: 61
   - platform: template
     name: "Auto-off ritardo${wiz_sfx}"
     id: auto_off1_delay
