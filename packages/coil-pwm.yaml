@@ -9,7 +9,7 @@ substitutions:
   coil_first_channel: "4"
 
 external_components:
-  - source: github://Gionames/esphome-shelly-wiz-physical-failsafe@v1.0.0
+  - source: github://Gionames/esphome-shelly-wiz-physical-failsafe@v1.1.0
     components: [coil_pwm]
 
 coil_pwm:
@@ -35,6 +35,7 @@ number:
     initial_value: 100
     web_server:
       sorting_group_id: grp_diag
+      sorting_weight: 1
 
 text_sensor:
   - platform: template
@@ -42,22 +43,34 @@ text_sensor:
     icon: mdi:information-outline
     entity_category: diagnostic
     update_interval: 1h
-    lambda: 'return {"Dopo lo scatto ogni relè viene tenuto chiuso con corrente ridotta (PWM a 20 kHz): meno calore e consumo, stesso stato. Per i primi 200 ms dopo ogni chiusura la bobina è al 100% per garantire lo scatto."};'
+    lambda: 'return {"Dopo lo scatto il relè resta chiuso con corrente ridotta (PWM): meno calore e consumo"};'
     web_server:
       sorting_group_id: grp_diag
+      sorting_weight: 2
   - platform: template
-    name: "Bobina relè: come si regola"
+    name: "Bobina relè: scatto"
     icon: mdi:information-outline
     entity_category: diagnostic
     update_interval: 1h
-    lambda: 'return {"Si regola con «Bobina relè: mantenimento», da 30% a 100% a passi di 5, uguale per tutti i relè. 100% = comportamento originale, senza PWM. Valore più basso = meno corrente di mantenimento. Vale subito e viene ricordato al riavvio."};'
+    lambda: 'return {"Nei primi 200 ms dopo ogni chiusura la bobina è al 100%"};'
     web_server:
       sorting_group_id: grp_diag
+      sorting_weight: 3
   - platform: template
-    name: "Bobina relè: attenzione"
+    name: "Bobina relè: regolazione"
     icon: mdi:information-outline
     entity_category: diagnostic
     update_interval: 1h
-    lambda: 'return {"Se il relè ricade o fa rumore con carico o vibrazioni, alza il valore (prova 60-70%) o torna a 100%. Il PWM si attiva solo dopo la prima chiusura con valore sotto 100%; a 100% la bobina è piena."};'
+    lambda: 'return {"Mantenimento da 30 a 100%. 100% = PWM spento (originale)"};'
     web_server:
       sorting_group_id: grp_diag
+      sorting_weight: 4
+  - platform: template
+    name: "Bobina relè: se vibra"
+    icon: mdi:information-outline
+    entity_category: diagnostic
+    update_interval: 1h
+    lambda: 'return {"Se il relè vibra o ricade, alza il valore (60-70%) o torna a 100%"};'
+    web_server:
+      sorting_group_id: grp_diag
+      sorting_weight: 5
