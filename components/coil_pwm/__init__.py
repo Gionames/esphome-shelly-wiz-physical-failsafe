@@ -16,6 +16,12 @@ coil_pwm_ns = cg.esphome_ns.namespace("coil_pwm")
 CoilPwm = coil_pwm_ns.class_("CoilPwm", cg.Component)
 
 
+def _csv(value):
+    if isinstance(value, str):
+        return [s.strip() for s in value.split(",") if s.strip()]
+    return value
+
+
 def _same_length(config):
     if len(config[CONF_RELAYS]) != len(config[CONF_PINS]):
         raise cv.Invalid("relays and pins must have the same number of entries")
@@ -26,8 +32,8 @@ CONFIG_SCHEMA = cv.All(
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(CoilPwm),
-            cv.Required(CONF_RELAYS): cv.ensure_list(cv.use_id(switch.Switch)),
-            cv.Required(CONF_PINS): cv.ensure_list(cv.int_range(min=0, max=48)),
+            cv.Required(CONF_RELAYS): cv.All(_csv, cv.ensure_list(cv.use_id(switch.Switch))),
+            cv.Required(CONF_PINS): cv.All(_csv, cv.ensure_list(cv.int_range(min=0, max=48))),
             cv.Required(CONF_HOLD_PERCENT): cv.use_id(number.Number),
             cv.Optional(CONF_FIRST_CHANNEL, default=4): cv.int_range(min=0, max=5),
         }
