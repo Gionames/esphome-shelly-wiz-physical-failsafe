@@ -121,12 +121,12 @@ select:
     entity_category: config
     optimistic: true
     options:
-      - "Interruttore: commuta a ogni scatto (Flip)"
-      - "Pulsante: commuta (Momentary)"
-      - "Interruttore: segue la posizione (Follow)"
-      - "Pulsante: solo accende (Activate)"
-      - "Scollegato (Detached)"
-    initial_option: "Interruttore: commuta a ogni scatto (Flip)"
+      - "Interruttore: ogni cambio di posizione commuta la luce (Flip)"
+      - "Pulsante: ogni pressione commuta la luce (Momentary)"
+      - "Interruttore: la luce segue la posizione del tasto (Follow)"
+      - "Pulsante: ogni pressione accende, non spegne (Activate)"
+      - "Scollegato: l'ingresso non comanda nulla (Detached)"
+    initial_option: "Interruttore: ogni cambio di posizione commuta la luce (Flip)"
     restore_value: true
 
   - platform: template
@@ -889,7 +889,7 @@ switch:
 
 number:
   - platform: template
-    name: "Luminosità accensione"
+    name: "Accensione luminosità"
     id: wiz_on_brightness
     icon: mdi:brightness-6
     entity_category: config
@@ -905,7 +905,7 @@ number:
       sorting_group_id: grp_wiz
       sorting_weight: 60
   - platform: template
-    name: "Temperatura colore accensione"
+    name: "Accensione temperatura colore"
     id: wiz_on_kelvin
     icon: mdi:thermometer
     entity_category: config
