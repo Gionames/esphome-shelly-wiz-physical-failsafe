@@ -1,0 +1,63 @@
+# coil-pwm.yaml
+# Relay-coil saving: after the relay has closed, the coil is held with reduced PWM current
+# (LEDC, 20 kHz). 100% = original behaviour (no PWM). Needs wiz-physical-failsafe.yaml
+# (sorting group grp_diag). Required substitutions:
+#   coil_relays  ids of the relay switches, e.g. "relay_1" or "relay_1, relay_2"
+#   coil_pins    GPIO numbers driving those coils, same order, e.g. "10" or "5, 3"
+# Optional: coil_first_channel (first LEDC channel, default 4; timer 3 is used)
+substitutions:
+  coil_first_channel: "4"
+
+external_components:
+  - source: github://Gionames/esphome-shelly-wiz-physical-failsafe@main
+    components: [coil_pwm]
+
+coil_pwm:
+  id: coil_pwm_hub
+  relays: [${coil_relays}]
+  pins: [${coil_pins}]
+  hold_percent: coil_hold_pct
+  first_channel: ${coil_first_channel}
+
+number:
+  - platform: template
+    name: "Bobina relè: mantenimento"
+    id: coil_hold_pct
+    icon: mdi:sine-wave
+    entity_category: config
+    unit_of_measurement: "%"
+    min_value: 30
+    max_value: 100
+    step: 5
+    mode: box
+    optimistic: true
+    restore_value: true
+    initial_value: 100
+    web_server:
+      sorting_group_id: grp_diag
+
+text_sensor:
+  - platform: template
+    name: "Bobina relè: cosa fa"
+    icon: mdi:information-outline
+    entity_category: diagnostic
+    update_interval: 1h
+    lambda: 'return {"Dopo lo scatto ogni relè viene tenuto chiuso con corrente ridotta (PWM a 20 kHz): meno calore e consumo, stesso stato. Per i primi 200 ms dopo ogni chiusura la bobina è al 100% per garantire lo scatto."};'
+    web_server:
+      sorting_group_id: grp_diag
+  - platform: template
+    name: "Bobina relè: come si regola"
+    icon: mdi:information-outline
+    entity_category: diagnostic
+    update_interval: 1h
+    lambda: 'return {"Si regola con «Bobina relè: mantenimento», da 30% a 100% a passi di 5, uguale per tutti i relè. 100% = comportamento originale, senza PWM. Valore più basso = meno corrente di mantenimento. Vale subito e viene ricordato al riavvio."};'
+    web_server:
+      sorting_group_id: grp_diag
+  - platform: template
+    name: "Bobina relè: attenzione"
+    icon: mdi:information-outline
+    entity_category: diagnostic
+    update_interval: 1h
+    lambda: 'return {"Se il relè ricade o fa rumore con carico o vibrazioni, alza il valore (prova 60-70%) o torna a 100%. Il PWM si attiva solo dopo la prima chiusura con valore sotto 100%; a 100% la bobina è piena."};'
+    web_server:
+      sorting_group_id: grp_diag
