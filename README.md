@@ -54,9 +54,9 @@ For push buttons (Momentary / Activate) two more fields apply, both changeable a
 
 Press, release, click and double-click events were removed on purpose: for a wall switch, latency matters more.
 
-## Wiring note
+## Wiring note (unofficial)
 
-The SW input of Shelly Gen4 also works when the push button connects it to **neutral** instead of live (tested on a 2PM Gen4: no missed or bouncing presses; the input draws slightly more current while pressed, irrelevant for push buttons). Useful when existing wiring switches the neutral.
+The SW input of a Shelly Gen4 also appeared to work when the push button connects it to **neutral** instead of live. This is **not documented by Shelly** and is derived only from **brief, informal tests** on a 2PM Gen4 (a few dozen short and long presses, no missed or bouncing presses seen) and from unofficial forum reports. Neutral-side switching reportedly draws more current while pressed: irrelevant for push buttons, not advisable for switches left closed for long periods. Verify on your own hardware and have the wiring checked by a qualified electrician.
 
 ## Keeping it stable
 
