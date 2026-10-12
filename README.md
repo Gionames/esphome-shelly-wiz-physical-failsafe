@@ -10,7 +10,7 @@ Built on top of [automatous-io/shelly-gen4-esphome](https://github.com/automatou
 - The Shelly registers itself with each bulb (WiZ `registration`, UDP 38900) and receives push state updates; a safety poll runs every `poll_interval`.
 - If fewer bulbs than the adjustable **Quorum Wiz** are reachable, failsafe mode starts: the input drives the relay directly.
 - Optional power-cycle (`powercycle_ms`, off by default): opens the relay briefly if no bulb answers although powered.
-- Four fields (all prefixed `Wiz: `, so they sit together in the device page) set the colour: **Wiz: luminosità accensione** / **Wiz: temperatura colore accensione** (used at every normal "on") and **Wiz: luminosità alternativa** / **Wiz: temperatura colore alternativa** (used by the long press, see below).
+- Four fields (all prefixed `Wiz - `, so they sit together in the device page) set the colour: **Wiz - accensione: luminosità** / **Wiz - accensione: temperatura colore** (used at every normal "on") and **Wiz - pressione lunga: luminosità alternativa** / **Wiz - pressione lunga: temperatura colore alternativa** (used by the long press, see below).
 - All entities are the same on every device; only model-specific data lives in the device file.
 
 ## Files
@@ -35,7 +35,7 @@ substitutions:
 
 packages:
   shelly: github://automatous-io/shelly-gen4-esphome/configs/shelly-1pm-mini-gen4.yaml@v1.5.2
-  wiz: github://Gionames/esphome-shelly-wiz-physical-failsafe/packages/wiz-physical-failsafe.yaml@v3.0.0
+  wiz: github://Gionames/esphome-shelly-wiz-physical-failsafe/packages/wiz-physical-failsafe.yaml@v3.2.0
   coil: github://Gionames/esphome-shelly-wiz-physical-failsafe/packages/coil-pwm.yaml@v2.0.0
 ```
 
@@ -49,18 +49,24 @@ Set **Modalità Input** to match the hardware: *Interruttore ... (Flip)* for tog
 
 For push buttons (Momentary / Activate) two more fields apply, both changeable at runtime without reflashing:
 
-- **Wiz: comando del pulsante**: *Alla pressione* (default) sends the command to the bulbs immediately (lowest latency; with the light on, a long press turns it off first). *Al rilascio* sends it when the button is released, adding the touch duration but never flashing the light on a long press.
-- **Wiz: pressione lunga** (threshold: **Wiz: durata pressione lunga**, 0.4-3 s): *Nessuna azione*, *Imposta luminosità e colore alternativi alle Wiz* (light on: only changes brightness/colour, does not turn off; light off: turns on already with the alternative values; in failsafe it does nothing) or *Manda l'evento a Home Assistant* (event `pressione_lunga` on the **Ingresso** event entity).
+- **Wiz - comando del pulsante**: *Alla pressione* sends the command to the bulbs immediately (lowest latency; with the light on, a long press turns it off first). *Al rilascio* (default) sends it when the button is released, adding the touch duration but never flashing the light on a long press.
+- **Wiz - pressione lunga** (threshold: **Wiz - pressione lunga: durata**, 0.4-3 s): *Nessuna azione*, *Imposta luminosità e colore alternativi alle Wiz* (light on: only changes brightness/colour, does not turn off; light off: turns on already with the alternative values; in failsafe it does nothing) or *Manda l'evento a Home Assistant* (event `pressione_lunga` on the **Ingresso** event entity).
 
 Press, release, click and double-click events were removed on purpose: for a wall switch, latency matters more.
 
+## Wiring note
+
+The SW input of Shelly Gen4 also works when the push button connects it to **neutral** instead of live (tested on a 2PM Gen4: no missed or bouncing presses; the input draws slightly more current while pressed, irrelevant for push buttons). Useful when existing wiring switches the neutral.
+
 ## Keeping it stable
 
-Pin packages to a tag (`@v3.0.0`), never `@main`. Running firmware is not affected by Home Assistant/ESPHome updates; only the next compile is. ESPHome caches GitHub packages for one day, so use a new tag when you change them.
+Pin packages to a tag (`@v3.2.0`), never `@main`. Running firmware is not affected by Home Assistant/ESPHome updates; only the next compile is. ESPHome caches GitHub packages for one day, so use a new tag when you change them.
 
 ## Versions
 
-- v3.0.0: push-button behaviour: command on press or on release, long press (alternative brightness/colour or event to HA); all new fields prefixed `Wiz: `; removed multi-click switch and press/release/click events. Entities "Accensione software: ..." renamed to "Wiz: ...".
+- v3.2.0: default push-button command on release; after a power loss the Wiz are always commanded on with the switch-on values.
+- v3.1.0: long press toggles between the normal and alternative colour combinations; fields renamed `Wiz - ...` in a fixed order.
+- v3.0.0: push-button behaviour: command on press or on release, long press (alternative brightness/colour or event to HA); all new fields prefixed `Wiz - `; removed multi-click switch and press/release/click events. Entities "Accensione software: ..." renamed to "Wiz - ...".
 - v2.1.x: on-colour fields (brightness/colour temperature at switch-on), input mode labels explained.
 - v2.0.0: package based on the Mini logic (adjustable quorum, optional power-cycle); entity names changed for the 2PM.
 - v1.1.0: on-colour fields next to each other, readable PWM help.
