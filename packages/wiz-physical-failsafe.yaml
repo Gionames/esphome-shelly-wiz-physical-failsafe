@@ -158,7 +158,7 @@ select:
     options:
       - "Alla pressione: subito, ma a luce accesa la pressione lunga la spegne prima"
       - "Al rilascio: aggiunge la durata del tocco, nessun lampeggio"
-    initial_option: "Alla pressione: subito, ma a luce accesa la pressione lunga la spegne prima"
+    initial_option: "Al rilascio: aggiunge la durata del tocco, nessun lampeggio"
     restore_value: true
 
   - platform: template
