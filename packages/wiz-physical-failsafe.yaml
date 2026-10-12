@@ -123,6 +123,9 @@ globals:
   - id: alt_cur           # il comando di accensione in corso usa i valori alternativi
     type: bool
     initial_value: "false"
+  - id: alt_on            # la combinazione alternativa è quella attualmente impostata sulle Wiz (la pressione lunga alterna)
+    type: bool
+    initial_value: "false"
 
 # --- Modalità input selezionabile da HA (senza riflash) ---
 # Stesse modalità dello Shelly: Flip, Momentary, Follow, Activate, Detached (vedi handler nello specchio)
@@ -145,7 +148,7 @@ select:
     restore_value: true
 
   - platform: template
-    name: "Wiz: comando del pulsante"
+    name: "Wiz - comando del pulsante"
     id: cmd_timing_select
     web_server:
       sorting_group_id: grp_ingresso
@@ -159,7 +162,7 @@ select:
     restore_value: true
 
   - platform: template
-    name: "Wiz: pressione lunga"
+    name: "Wiz - pressione lunga"
     id: longpress_select
     web_server:
       sorting_group_id: grp_ingresso
@@ -534,7 +537,7 @@ script:
           const int lp = id(longpress_select).active_index().value_or(0);
           if (lp == 1) {
             // accende (o resta accesa) con luminosità e colore alternativi; in failsafe non c'è nessuna Wiz da comandare
-            id(alt_req) = !id(failsafe_mode) && id(relay_1).state;
+            id(alt_req) = !id(failsafe_mode) && (!id(light_on_sensor).state || !id(alt_on));
             id(sw_action) = 1;
             id(sw_changed).execute();
           } else if (lp == 2) {
@@ -586,6 +589,7 @@ script:
                 id: wiz_cmd
                 kind: !lambda |-
                   id(alt_cur) = id(want_on) && id(alt_req);
+                  id(alt_on) = id(alt_cur);
                   id(alt_req) = false;
                   return id(want_on) ? 1 : 2;
                 retry_ms: ${wiz_retry_ms}
@@ -937,7 +941,7 @@ switch:
 
 number:
   - platform: template
-    name: "Wiz: luminosità accensione"
+    name: "Wiz - accensione: luminosità"
     id: wiz_on_brightness
     icon: mdi:brightness-6
     entity_category: config
@@ -953,7 +957,7 @@ number:
       sorting_group_id: grp_wiz
       sorting_weight: 60
   - platform: template
-    name: "Wiz: temperatura colore accensione"
+    name: "Wiz - accensione: temperatura colore"
     id: wiz_on_kelvin
     icon: mdi:thermometer
     entity_category: config
@@ -969,7 +973,7 @@ number:
       sorting_group_id: grp_wiz
       sorting_weight: 61
   - platform: template
-    name: "Wiz: luminosità alternativa"
+    name: "Wiz - pressione lunga: luminosità alternativa"
     id: wiz_alt_brightness
     icon: mdi:brightness-4
     entity_category: config
@@ -985,7 +989,7 @@ number:
       sorting_group_id: grp_wiz
       sorting_weight: 62
   - platform: template
-    name: "Wiz: temperatura colore alternativa"
+    name: "Wiz - pressione lunga: temperatura colore alternativa"
     id: wiz_alt_kelvin
     icon: mdi:thermometer-low
     entity_category: config
@@ -1001,7 +1005,7 @@ number:
       sorting_group_id: grp_wiz
       sorting_weight: 63
   - platform: template
-    name: "Wiz: durata pressione lunga"
+    name: "Wiz - pressione lunga: durata"
     id: lp_threshold
     icon: mdi:timer-outline
     entity_category: config
@@ -1062,7 +1066,7 @@ number:
 
 text_sensor:
   - platform: template
-    name: "Wiz: guida comando pulsante"
+    name: "Wiz - guida comando pulsante"
     icon: mdi:information-outline
     entity_category: diagnostic
     update_interval: 1h
@@ -1070,7 +1074,7 @@ text_sensor:
     web_server:
       sorting_group_id: grp_diag
   - platform: template
-    name: "Wiz: guida pressione lunga"
+    name: "Wiz - guida pressione lunga"
     icon: mdi:information-outline
     entity_category: diagnostic
     update_interval: 1h
