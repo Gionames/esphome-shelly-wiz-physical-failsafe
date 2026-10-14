@@ -410,7 +410,17 @@ script:
           s->setblocking(false);
           id(wiz_sock) = s.release();
           id(wiz_kind) = kind;
-          id(wiz_retry) = retry_ms;
+          // setPilot (acceso/spento): gli invii sono "Invii setPilot Wiz" (entità, default 4), distribuiti
+          // in modo uniforme entro il tempo massimo (4 invii a 1400 ms = ogni 350 ms). getPilot usa retry_ms.
+          if (kind > 0) {
+            int sends = (int) id(wiz_sends_num).state;
+            if (sends < 1) sends = 1;
+            if (sends > 10) sends = 10;
+            int r = deadline_ms / sends;
+            id(wiz_retry) = r < 60 ? 60 : r;
+          } else {
+            id(wiz_retry) = retry_ms;
+          }
           id(wiz_deadline) = deadline_ms;
           id(wiz_t0) = millis();
           id(wiz_next) = 0;
@@ -1101,6 +1111,20 @@ number:
     optimistic: true
     restore_value: true
     initial_value: 1400
+    web_server:
+      sorting_group_id: grp_wiz
+  - platform: template
+    name: "Invii setPilot Wiz"
+    id: wiz_sends_num
+    icon: mdi:repeat
+    entity_category: config
+    min_value: 1
+    max_value: 10
+    step: 1
+    mode: box
+    optimistic: true
+    restore_value: true
+    initial_value: 4
     web_server:
       sorting_group_id: grp_wiz
 
