@@ -64,6 +64,7 @@ Pin packages to a tag (`@v3.3.0`), never `@main`. Running firmware is not affect
 
 ## Versions
 
+- v3.4.0: adjustable number of `setPilot` sends per command ("Invii setPilot Wiz", 1-10, default 4 = previous behaviour at 1400 ms), spread evenly within the confirmation time.
 - v3.3.0: adjustable confirmation time ("Tempo conferma Wiz"); the push subscription (`syncPilot`) now also counts as command confirmation; logs show direct reply vs SUBSCRIPTION counts. Fixes spurious failsafe with a single slow-to-answer bulb.
 - v3.2.0: default push-button command on release; after a power loss the Wiz are always commanded on with the switch-on values.
 - v3.1.0: long press toggles between the normal and alternative colour combinations; fields renamed `Wiz - ...` in a fixed order.
