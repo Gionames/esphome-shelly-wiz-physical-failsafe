@@ -6,7 +6,7 @@ Built on top of [automatous-io/shelly-gen4-esphome](https://github.com/automatou
 
 ## How it works
 
-- Commands (`setPilot` on/off) are sent to every bulb; bulbs that do not answer with `success` are retried every `wiz_retry_ms` until `wiz_deadline_ms`.
+- Commands (`setPilot` on/off) are sent to every bulb; bulbs that do not answer with `success` are retried every `wiz_retry_ms` until the confirmation time is over. A command also counts as confirmed when the push subscription (`syncPilot`) already shows the wanted state (and, for switch-on, the requested brightness); the log says whether each confirmation came from the direct reply or from the SUBSCRIPTION. If confirmations are missing, a final `getPilot` check runs before failsafe is declared.
 - The Shelly registers itself with each bulb (WiZ `registration`, UDP 38900) and receives push state updates; a safety poll runs every `poll_interval`.
 - If fewer bulbs than the adjustable **Quorum Wiz** are reachable, failsafe mode starts: the input drives the relay directly.
 - Optional power-cycle (`powercycle_ms`, off by default): opens the relay briefly if no bulb answers although powered.
@@ -35,13 +35,13 @@ substitutions:
 
 packages:
   shelly: github://automatous-io/shelly-gen4-esphome/configs/shelly-1pm-mini-gen4.yaml@v1.5.2
-  wiz: github://Gionames/esphome-shelly-wiz-physical-failsafe/packages/wiz-physical-failsafe.yaml@v3.2.0
+  wiz: github://Gionames/esphome-shelly-wiz-physical-failsafe/packages/wiz-physical-failsafe.yaml@v3.3.0
   coil: github://Gionames/esphome-shelly-wiz-physical-failsafe/packages/coil-pwm.yaml@v2.0.0
 ```
 
 Add your own `esphome:`, `api:` and `wifi:` blocks as usual. The relay id must be `relay_1`.
 
-Optional substitutions: `wiz_retry_ms`, `wiz_deadline_ms`, `wiz_confirm_ms`, `powercycle_ms`, `health_check_interval`, `poll_interval`.
+The confirmation time is the adjustable entity **Tempo conferma Wiz** (500-4000 ms, default 1400; Home Assistant and web page). The `getPilot` confirmation uses 4/7 of it. Optional substitutions: `wiz_retry_ms`, `powercycle_ms`, `health_check_interval`, `poll_interval` (`wiz_deadline_ms` and `wiz_confirm_ms` still exist but default to the entity).
 
 ## Input mode and push button
 
@@ -60,10 +60,11 @@ The SW input of a Shelly Gen4 also appeared to work when the push button connect
 
 ## Keeping it stable
 
-Pin packages to a tag (`@v3.2.0`), never `@main`. Running firmware is not affected by Home Assistant/ESPHome updates; only the next compile is. ESPHome caches GitHub packages for one day, so use a new tag when you change them.
+Pin packages to a tag (`@v3.3.0`), never `@main`. Running firmware is not affected by Home Assistant/ESPHome updates; only the next compile is. ESPHome caches GitHub packages for one day, so use a new tag when you change them.
 
 ## Versions
 
+- v3.3.0: adjustable confirmation time ("Tempo conferma Wiz"); the push subscription (`syncPilot`) now also counts as command confirmation; logs show direct reply vs SUBSCRIPTION counts. Fixes spurious failsafe with a single slow-to-answer bulb.
 - v3.2.0: default push-button command on release; after a power loss the Wiz are always commanded on with the switch-on values.
 - v3.1.0: long press toggles between the normal and alternative colour combinations; fields renamed `Wiz - ...` in a fixed order.
 - v3.0.0: push-button behaviour: command on press or on release, long press (alternative brightness/colour or event to HA); all new fields prefixed `Wiz - `; removed multi-click switch and press/release/click events. Entities "Accensione software: ..." renamed to "Wiz - ...".
