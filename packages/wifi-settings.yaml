@@ -1,4 +1,4 @@
-# wifi-settings.yaml  (v1.0.0)
+# wifi-settings.yaml  (v1.1.0)
 # Impostazioni Wi-Fi modificabili da Home Assistant (device info) e dalla pagina web, con due reti (come ShellyOS).
 # Funziona su qualunque ESPHome che abbia gia' il blocco "wifi:" (con le sue reti in YAML come punto di partenza).
 #
@@ -10,13 +10,13 @@
 # Regole:
 #   - campi vuoti = nessun cambiamento: il dispositivo usa la rete scritta nello YAML.
 #   - all'avvio, se la rete 1 e' impostata e diversa da quella attuale, viene applicata (e salvata).
-#   - se la rete resta assente per "wifi_lost_timeout" e entrambe le reti sono impostate, passa all'altra.
+#   - se la rete resta assente per "wifi_lost_timeout" (default 30 s) e entrambe le reti sono impostate, passa all'altra.
 #   - i valori sono ricordati dopo riavvii e aggiornamenti OTA (restore_value).
 # ATTENZIONE: le password sono entita' di testo: Home Assistant ne conserva il valore nel suo storico
 # e la pagina web del dispositivo e' senza autenticazione. Usare solo su rete locale fidata.
 substitutions:
   wifi_apply_timeout: "30s"     # attesa massima per collegarsi a una rete durante un tentativo
-  wifi_lost_timeout: "90"       # secondi senza Wi-Fi prima di passare all'altra rete (controllo ogni 30 s)
+  wifi_lost_timeout: "30"       # secondi senza Wi-Fi prima di passare all'altra rete (controllo ogni 5 s)
 
 esphome:
   on_boot:
@@ -231,11 +231,11 @@ script:
 
 interval:
   # se il Wi-Fi manca da troppo e le due reti sono impostate, passa all'altra (senza salvarla)
-  - interval: 30s
+  - interval: 5s
     then:
       - lambda: |-
           if (wifi::global_wifi_component->is_connected()) id(wifi_down_s) = 0;
-          else id(wifi_down_s) += 30;
+          else id(wifi_down_s) += 5;
       - if:
           condition:
             lambda: |-
