@@ -1,4 +1,4 @@
-# wifi-settings.yaml  (v1.1.0)
+# wifi-settings.yaml  (v1.2.0)
 # Impostazioni Wi-Fi modificabili da Home Assistant (device info) e dalla pagina web, con due reti (come ShellyOS).
 # Funziona su qualunque ESPHome che abbia gia' il blocco "wifi:" (con le sue reti in YAML come punto di partenza).
 #
@@ -15,6 +15,12 @@
 # ATTENZIONE: le password sono entita' di testo: Home Assistant ne conserva il valore nel suo storico
 # e la pagina web del dispositivo e' senza autenticazione. Usare solo su rete locale fidata.
 substitutions:
+  # valori iniziali dei campi (usati solo al primo avvio, finche' non li cambi da HA o dalla pagina web).
+  # NON scrivere password in chiaro nel repo: nel YAML del device usa !secret.
+  wifi1_ssid: ""
+  wifi1_pass: ""
+  wifi2_ssid: ""
+  wifi2_pass: ""
   wifi_apply_timeout: "30s"     # attesa massima per collegarsi a una rete durante un tentativo
   wifi_lost_timeout: "30"       # secondi senza Wi-Fi prima di passare all'altra rete (controllo ogni 5 s)
 
@@ -73,7 +79,7 @@ text:
     max_length: 32
     optimistic: true
     restore_value: true
-    initial_value: ""
+    initial_value: "${wifi1_ssid}"
     web_server:
       sorting_group_id: grp_wifi
       sorting_weight: 10
@@ -87,7 +93,7 @@ text:
     max_length: 63
     optimistic: true
     restore_value: true
-    initial_value: ""
+    initial_value: "${wifi1_pass}"
     web_server:
       sorting_group_id: grp_wifi
       sorting_weight: 20
@@ -101,7 +107,7 @@ text:
     max_length: 32
     optimistic: true
     restore_value: true
-    initial_value: ""
+    initial_value: "${wifi2_ssid}"
     web_server:
       sorting_group_id: grp_wifi
       sorting_weight: 30
@@ -115,7 +121,7 @@ text:
     max_length: 63
     optimistic: true
     restore_value: true
-    initial_value: ""
+    initial_value: "${wifi2_pass}"
     web_server:
       sorting_group_id: grp_wifi
       sorting_weight: 40
