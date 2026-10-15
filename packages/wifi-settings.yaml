@@ -1,4 +1,4 @@
-# wifi-settings.yaml  (v1.2.0)
+# wifi-settings.yaml  (v1.2.1)
 # Impostazioni Wi-Fi modificabili da Home Assistant (device info) e dalla pagina web, con due reti (come ShellyOS).
 # Funziona su qualunque ESPHome che abbia gia' il blocco "wifi:" (con le sue reti in YAML come punto di partenza).
 #
@@ -127,6 +127,10 @@ text:
       sorting_weight: 40
 
 text_sensor:
+  - platform: wifi_info
+    ssid:
+      id: wifi_cur_ssid
+      internal: true
   - platform: template
     name: "Wi-Fi - stato"
     id: wifi_status_ts
@@ -207,12 +211,12 @@ script:
                 condition:
                   lambda: |-
                     std::string ssid = (id(wifi_try) == 1) ? id(wifi1_ssid).state : id(wifi2_ssid).state;
-                    return wifi::global_wifi_component->is_connected() && wifi::global_wifi_component->wifi_ssid() == ssid;
+                    return wifi::global_wifi_component->is_connected() && id(wifi_cur_ssid).state == ssid;
                 then:
                   - lambda: |-
                       id(wifi_slot) = id(wifi_try);
                       id(wifi_busy) = false;
-                      std::string m = "Collegato alla rete " + std::to_string(id(wifi_try)) + ": " + wifi::global_wifi_component->wifi_ssid();
+                      std::string m = "Collegato alla rete " + std::to_string(id(wifi_try)) + ": " + id(wifi_cur_ssid).state;
                       id(wifi_status_ts).publish_state(m);
                 else:
                   - lambda: |-
@@ -227,7 +231,7 @@ script:
                         - lambda: |-
                             id(wifi_slot) = id(wifi_try);
                             id(wifi_busy) = false;
-                            std::string m = "Collegato alla rete " + std::to_string(id(wifi_try)) + ": " + wifi::global_wifi_component->wifi_ssid();
+                            std::string m = "Collegato alla rete " + std::to_string(id(wifi_try)) + ": " + id(wifi_cur_ssid).state;
                             id(wifi_status_ts).publish_state(m);
                       on_error:
                         - lambda: |-
