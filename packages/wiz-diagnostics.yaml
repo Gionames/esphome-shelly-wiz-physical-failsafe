@@ -1,0 +1,94 @@
+# wiz-diagnostics.yaml (v4.0.0) - segnale WiFi, uptime, IP Wiz, latenza, versione, motivo riavvio, safe mode. Opzionale.
+
+debug:
+
+binary_sensor:
+  - platform: template
+    name: "Sottoscrizione Wiz attiva"
+    id: wiz_sub_active
+    device_class: connectivity
+    entity_category: diagnostic
+    lambda: 'return id(wiz_lsock) != nullptr;'
+    web_server:
+      sorting_group_id: grp_wiz
+
+sensor:
+  - platform: template
+    name: "Wiz configurate"
+    id: wiz_count
+    icon: mdi:lightbulb-group
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    update_interval: 60s
+    lambda: 'return (float) id(wiz_n);'
+    web_server:
+      sorting_group_id: grp_wiz
+  - platform: template
+    name: "Wiz tempo di risposta (max)"
+    icon: mdi:timer-outline
+    unit_of_measurement: ms
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    update_interval: 10s
+    lambda: |-
+      if (id(wiz_busy)) return {};
+      int m = -1;
+      for (int i = 0; i < id(wiz_n); i++) {
+        if (id(wiz_acked)[i] && (int) id(wiz_rtt)[i] > m) m = id(wiz_rtt)[i];
+      }
+      if (m < 0) return {};
+      return (float) m;
+    filters:
+      - delta: 1.0
+    web_server:
+      sorting_group_id: grp_wiz
+  - platform: wifi_signal
+    name: "Segnale WiFi"
+    update_interval: 60s
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: grp_diag
+  - platform: uptime
+    name: "Uptime"
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: grp_diag
+
+text_sensor:
+  - platform: template
+    name: "IP Wiz"
+    icon: mdi:ip-network
+    entity_category: diagnostic
+    update_interval: 1h
+    lambda: 'return {"${wiz_ips}"};'
+    web_server:
+      sorting_group_id: grp_wiz
+  - platform: wifi_info
+    ip_address:
+      name: "IP"
+      web_server:
+        sorting_group_id: grp_diag
+    ssid:
+      name: "SSID"
+      web_server:
+        sorting_group_id: grp_diag
+    bssid:
+      name: "Access point (BSSID)"
+      web_server:
+        sorting_group_id: grp_diag
+  - platform: version
+    name: "Versione ESPHome"
+    web_server:
+      sorting_group_id: grp_diag
+  - platform: debug
+    reset_reason:
+      name: "Motivo ultimo riavvio"
+      web_server:
+        sorting_group_id: grp_diag
+
+button:
+  - platform: safe_mode
+    name: "Riavvia in safe mode"
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: grp_diag

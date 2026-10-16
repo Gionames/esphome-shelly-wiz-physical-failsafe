@@ -1,0 +1,113 @@
+# timer.yaml (v4.0.0) - auto-off / auto-on con ritardo.
+# Obiettivo: usabile anche con luci non Wiz. ATTENZIONE: per ora dipende ancora da sw_changed e dal core (wiz-core.yaml).
+
+binary_sensor:
+  - platform: template
+    name: "Timer attivo"
+    id: tmr_active
+    icon: mdi:timer-sand
+    lambda: 'return id(tmr_kind) != 0;'
+    web_server:
+      sorting_group_id: grp_timer
+
+text_sensor:
+  - platform: template
+    name: "Timer: scade alle"
+    id: tmr_end_text
+    icon: mdi:clock-end
+    update_interval: 60s
+    lambda: |-
+      if (id(tmr_kind) != 0) return {};
+      return {"-"};
+    web_server:
+      sorting_group_id: grp_timer
+
+switch:
+  - platform: template
+    name: "Auto-off"
+    id: auto_off_sw
+    icon: mdi:timer-off-outline
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    turn_off_action:
+      - lambda: 'if (id(tmr_kind) == 1) id(tmr_cancel).execute();'
+    web_server:
+      sorting_group_id: grp_timer
+  - platform: template
+    name: "Auto-on"
+    id: auto_on_sw
+    icon: mdi:timer-outline
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    turn_off_action:
+      - lambda: 'if (id(tmr_kind) == 2) id(tmr_cancel).execute();'
+    web_server:
+      sorting_group_id: grp_timer
+
+number:
+  - platform: template
+    name: "Auto-off ritardo"
+    id: auto_off_delay
+    icon: mdi:timer-cog-outline
+    entity_category: config
+    unit_of_measurement: s
+    min_value: 1
+    max_value: 86400
+    step: 1
+    mode: box
+    optimistic: true
+    restore_value: true
+    initial_value: 60
+    web_server:
+      sorting_group_id: grp_timer
+  - platform: template
+    name: "Auto-on ritardo"
+    id: auto_on_delay
+    icon: mdi:timer-cog-outline
+    entity_category: config
+    unit_of_measurement: s
+    min_value: 1
+    max_value: 86400
+    step: 1
+    mode: box
+    optimistic: true
+    restore_value: true
+    initial_value: 60
+    web_server:
+      sorting_group_id: grp_timer
+
+script:
+  # timer: kind 1 = auto-off, 2 = auto-on (come switch.auto_off / auto_on dello Shelly)
+  - id: tmr_arm
+    parameters:
+      kind: int
+    then:
+      - lambda: |-
+          const float secs = kind == 1 ? id(auto_off_delay).state : id(auto_on_delay).state;
+          id(tmr_kind) = kind;
+          id(tmr_end) = millis() + (uint32_t) (secs * 1000.0f);
+          auto t = id(ha_time).now();
+          if (t.is_valid()) id(tmr_end_text).publish_state(ESPTime::from_epoch_local(t.timestamp + (time_t) secs).strftime("%H:%M:%S"));
+          else id(tmr_end_text).publish_state("tra " + to_string((int) secs) + " s");
+          ESP_LOGI("timer", "%s tra %d s", kind == 1 ? "auto-off" : "auto-on", (int) secs);
+  - id: tmr_cancel
+    then:
+      - lambda: |-
+          if (id(tmr_kind) != 0) ESP_LOGI("timer", "timer annullato");
+          id(tmr_kind) = 0;
+          id(tmr_end_text).publish_state("-");
+
+interval:
+  # timer auto-off / auto-on: alla scadenza passa dalla stessa logica dell'interruttore (Wiz o failsafe)
+  - interval: 250ms
+    then:
+      - lambda: |-
+          if (id(tmr_kind) == 0 || (int32_t) (millis() - id(tmr_end)) < 0) return;
+          const int k = id(tmr_kind);
+          id(tmr_kind) = 0;
+          id(tmr_end_text).publish_state("-");
+          ESP_LOGI("timer", "%s scaduto", k == 1 ? "auto-off" : "auto-on");
+          id(sw_action) = k == 1 ? 2 : 1;
+          id(sw_changed).execute();

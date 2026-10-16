@@ -1,0 +1,43 @@
+# wiz-failsafe-status.yaml (v4.0.0) - entità di stato del failsafe (attivo, contatore, ultima attivazione). Opzionale: toglierlo non cambia la logica.
+
+binary_sensor:
+  - platform: template
+    name: "Failsafe attivo"
+    id: failsafe_active
+    web_server:
+      sorting_group_id: grp_wiz
+    device_class: problem
+    lambda: 'return id(failsafe_mode);'
+    on_press:
+      - lambda: |-
+          id(fs_count) += 1;
+          auto t = id(ha_time).now();
+          if (t.is_valid()) id(fs_last_epoch) = (uint32_t) t.timestamp;
+          id(fs_count_sensor).update();
+          id(fs_last_text).update();
+
+sensor:
+  - platform: template
+    name: "Failsafe: attivazioni"
+    id: fs_count_sensor
+    icon: mdi:counter
+    accuracy_decimals: 0
+    state_class: total_increasing
+    entity_category: diagnostic
+    update_interval: 60s
+    lambda: 'return (float) id(fs_count);'
+    web_server:
+      sorting_group_id: grp_wiz
+
+text_sensor:
+  - platform: template
+    name: "Failsafe: ultima attivazione"
+    id: fs_last_text
+    icon: mdi:history
+    entity_category: diagnostic
+    update_interval: 60s
+    lambda: |-
+      if (id(fs_last_epoch) == 0) return {"mai"};
+      return ESPTime::from_epoch_local(id(fs_last_epoch)).strftime("%d/%m/%Y %H:%M:%S");
+    web_server:
+      sorting_group_id: grp_wiz

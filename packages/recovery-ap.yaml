@@ -1,0 +1,16 @@
+# recovery-ap.yaml (v1.0.0) - punto di accesso di recupero + captive portal.
+# L'AP compare SOLO se il Wi-Fi non si connette (non in funzionamento normale): permette di reimpostare il Wi-Fi o caricare un fw da browser.
+# Richiede web_server (già presente nei package) per il captive portal.
+# Sostituzioni opzionali:
+#   recovery_ap_ssid       SSID dell'AP (default "${name}-recovery", max 32 caratteri)
+#   recovery_ap_password   password dell'AP (default vuota = AP APERTO; consigliato impostarla in secrets)
+substitutions:
+  recovery_ap_ssid: "${name}-recovery"
+  recovery_ap_password: ""
+
+wifi:
+  ap:
+    ssid: "${recovery_ap_ssid}"
+    password: "${recovery_ap_password}"
+
+captive_portal:
