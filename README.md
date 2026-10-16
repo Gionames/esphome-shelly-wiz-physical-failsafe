@@ -73,3 +73,25 @@ Pin packages to a tag (`@v3.3.0`), never `@main`. Running firmware is not affect
 - v2.0.0: package based on the Mini logic (adjustable quorum, optional power-cycle); entity names changed for the 2PM.
 - v1.1.0: on-colour fields next to each other, readable PWM help.
 - v1.0.0: first release.
+
+## Moduli (ramo `modularizzazione`, v4.0.0 sperimentale)
+
+`packages/wiz-physical-failsafe.yaml` (monolitico, fino a v3.8.0) è stato diviso in moduli con comportamento identico (verificato: la configurazione risolta da `esphome config` coincide). Si includono con `files:`:
+
+```yaml
+packages:
+  wiz:
+    url: https://github.com/Gionames/esphome-shelly-wiz-physical-failsafe
+    ref: modularizzazione
+    files:
+      - packages/wiz-core.yaml            # obbligatorio
+      - packages/input.yaml               # obbligatorio per ora (da rendere generico)
+      - packages/timer.yaml               # obbligatorio per ora (da rendere generico)
+      - packages/wiz-failsafe-status.yaml # opzionale
+      - packages/wiz-diagnostics.yaml     # opzionale
+      - packages/wifi-settings.yaml       # opzionale
+      - packages/recovery-ap.yaml         # opzionale: AP + captive portal di recupero
+      - packages/coil-pwm.yaml            # opzionale
+```
+
+Verificate con `esphome config`: core+input+timer; più status; più diagnostics. Input e timer sono ancora referenziati dal codice del core: renderli opzionali richiede degli "hook" (prossimo passo). **Non provato su hardware.**
