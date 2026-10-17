@@ -245,6 +245,7 @@ switch:
           id(failsafe_mode) = true;
     web_server:
       sorting_group_id: grp_wiz
+      sorting_weight: 71
 
 number:
   - platform: template
