@@ -233,10 +233,10 @@ switch:
     web_server:
       sorting_group_id: grp_luce
   - platform: template
-    name: "Failsafe forzato"
+    name: "Failsafe on/off - Forzato"
     id: failsafe_forced
     icon: mdi:shield-alert
-    entity_category: config
+    entity_category: diagnostic
     optimistic: true
     restore_mode: RESTORE_DEFAULT_OFF
     turn_on_action:
