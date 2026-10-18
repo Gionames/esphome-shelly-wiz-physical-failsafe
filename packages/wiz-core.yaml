@@ -414,25 +414,6 @@ light:
 
 switch:
   - platform: template
-    name: "Luce"
-    id: light_switch
-    icon: mdi:lightbulb
-    lambda: 'return id(light_on_sensor).state;'
-    restore_mode: DISABLED      # nessuna azione all'avvio
-    turn_on_action:
-      - lambda: |-
-          if (!id(boot_done)) return;
-          if (id(light_on_sensor).state && id(auto_off_sw).state) id(tmr_arm).execute(1);
-          id(sw_action) = 1;
-          id(sw_changed).execute();
-    turn_off_action:
-      - lambda: |-
-          if (!id(boot_done)) return;
-          id(sw_action) = 2;
-          id(sw_changed).execute();
-    web_server:
-      sorting_group_id: grp_luce
-  - platform: template
     name: "Failsafe on/off - Forzato"
     id: failsafe_forced
     icon: mdi:shield-alert
@@ -784,6 +765,7 @@ script:
             id(sw_action) = 2;
             return;
           }
+          if (id(light_on_sensor).state && id(auto_off_sw).state) id(tmr_arm).execute(1);   // luce già accesa e auto-off attivo: riarma il timer
           const bool has_k = (kelvin >= 2200 && kelvin <= 6500);
           const bool has_c = (!has_k && r >= 0 && g >= 0 && b >= 0);
           if (bri <= 0 && !has_k && !has_c) {
