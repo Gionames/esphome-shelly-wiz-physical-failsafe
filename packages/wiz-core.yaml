@@ -186,7 +186,7 @@ api:
             int r = -1, g = -1, b = -1;
             if (hue >= 0 && sat >= 0) {
               // colore da tonalità e saturazione (luminosità piena: la regola "bri")
-              const float hh = fmodf((float) hue, 360.0f) / 60.0f, ss = std::min(100, sat) / 100.0f;
+              const float hh = fmodf((float) hue, 360.0f) / 60.0f, ss = std::min<int>(100, (int) sat) / 100.0f;
               const int k = (int) hh;
               const float f = hh - k, p = 1 - ss, q = 1 - ss * f, t = 1 - ss * (1 - f);
               float R = 1, G = 1, B = 1;
@@ -395,7 +395,7 @@ light:
       - lambda: |-
           // ignoro: avvio non ancora finito, oppure è il riallineamento allo stato reale delle Wiz (non un comando)
           if (id(wl_sync) || !id(boot_done) || !id(pon_done)) return;
-          const auto &rv = id(wiz_light).remote_values;
+          const auto &rv = id(wiz_light)->remote_values;
           id(wl_cmd_t) = millis();
           if (!rv.is_on()) {
             id(wiz_request).execute(false, -1, 0, -1, -1, -1);
@@ -1149,8 +1149,8 @@ interval:
     then:
       - lambda: |-
           if (!id(pon_done) || id(wiz_busy) || (uint32_t) (millis() - id(wl_cmd_t)) < 3000) return;
-          auto &lt = id(wiz_light);
-          const auto &rv = lt.remote_values;
+          light::LightState *lt = id(wiz_light);
+          const auto &rv = lt->remote_values;
           const bool on = id(light_on_sensor).state;
           int n = 0, sd = 0, nt = 0, sk = 0, nr = 0, sr = 0, sg = 0, sb = 0;
           if (!id(failsafe_mode)) {
@@ -1182,7 +1182,7 @@ interval:
           }
           if (!change) return;
           id(wl_sync) = true;
-          auto call = lt.make_call();
+          auto call = lt->make_call();
           call.set_state(on);
           call.set_transition_length((uint32_t) 0);
           if (on && n > 0) {
