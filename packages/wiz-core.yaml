@@ -423,8 +423,11 @@ switch:
     turn_on_action:
       - lambda: |-
           ESP_LOGW("wiz", "failsafe forzato da HA");
+          const bool was_on = id(light_on_sensor).state;   // letto prima: in failsafe la luce è il relè
           id(fs_proactive) = false;
           id(failsafe_mode) = true;
+          // in failsafe la luce è il relè (chiuso = acceso): se la luce era spenta apro il relè, altrimenti risulterebbe accesa
+          if (id(boot_done) && !was_on && id(relay_1).state) id(relay_1).turn_off();
     turn_off_action:
       # tolto il forzato: se il relè è chiuso provo subito a uscire dal failsafe (Wiz raggiungibili); a relè aperto non tocco nulla,
       # il failsafe si disattiva alla prossima chiusura del relè
@@ -799,7 +802,7 @@ script:
     then:
       - if:
           condition:
-            lambda: 'return id(boot_done) && id(failsafe_mode) && id(relay_1).state && !id(wiz_busy);'
+            lambda: 'return id(boot_done) && id(failsafe_mode) && !id(failsafe_forced).state && id(relay_1).state && !id(wiz_busy);'
           then:
             - script.execute:
                 id: wiz_cmd
