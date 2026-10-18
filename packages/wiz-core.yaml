@@ -151,24 +151,37 @@ esp32:
       # socket per le Wiz: uno per i comandi e uno in ascolto per la sottoscrizione. Margine rispetto al calcolo automatico
       CONFIG_LWIP_MAX_SOCKETS: "20"
 
-# Comando dalla facciata di HA (esphome.<nodo>_wiz_set): luminosità e/o colore passano dallo stesso percorso dell'interruttore fisico,
-# quindi con conferma e failsafe. brightness 10-100 (0 = invariata); kelvin 2200-6500 oppure r,g,b 0-255 (0 = non specificati).
+# UNICO comando da HA (esphome.<nodo>_wiz_set): on/off, luminosità, colore, tutto con la stessa azione. Passa dallo stesso percorso
+# dell'interruttore fisico e dell'interruttore "Luce" (sw_changed), quindi con conferma e failsafe: se le Wiz non rispondono
+# lo Shelly commuta il relè al posto del comando. Parametri: power (false = spegni); brightness 1-255 (scala HA, -1 = invariata);
+# hue 0-360 e sat 0-100 (colore, -1 = invariato); kelvin 2200-6500 (temperatura colore, 0 = invariata).
+# Solo power=true senza altri valori = accensione normale con i valori di accensione (luminosità e temperatura colore impostate).
 api:
   actions:
     - action: wiz_set
       variables:
+        power: bool
         brightness: int
+        hue: int
+        sat: int
         kelvin: int
-        r: int
-        g: int
-        b: int
       then:
         - lambda: |-
+            if (!power) {
+              id(sw_action) = 2;
+              return;
+            }
+            const bool has_col = (hue >= 0 && sat >= 0);
+            const bool has_k = (kelvin >= 2200 && kelvin <= 6500);
+            if (brightness <= 0 && !has_col && !has_k) {
+              id(sw_action) = 1;       // accensione normale
+              return;
+            }
             char *m = &id(custom_msg)[0];
             const size_t cap = 112;   // dimensione di custom_msg
             size_t l = snprintf(m, cap, "{\"method\":\"setPilot\",\"params\":{\"state\":true");
-            int bri = brightness;
-            if (bri > 0) {
+            if (brightness > 0) {
+              int bri = (brightness * 100 + 127) / 255;   // scala HA 1-255 -> 10-100 %
               if (bri < 10) bri = 10;
               if (bri > 100) bri = 100;
               l += snprintf(m + l, cap - l, ",\"dimming\":%d", bri);
@@ -176,11 +189,23 @@ api:
             } else {
               id(custom_bri) = -1;
             }
-            if (kelvin >= 2200 && kelvin <= 6500) {
+            if (has_k) {
               l += snprintf(m + l, cap - l, ",\"temp\":%d", kelvin);
-            } else if (r > 0 || g > 0 || b > 0) {
-              auto c = [](int v) { return v < 0 ? 0 : (v > 255 ? 255 : v); };
-              l += snprintf(m + l, cap - l, ",\"r\":%d,\"g\":%d,\"b\":%d", c(r), c(g), c(b));
+            } else if (has_col) {
+              // colore da tonalità e saturazione (luminosità piena: la regola "dimming")
+              const float hh = fmodf((float) hue, 360.0f) / 60.0f, ss = std::min(100, sat) / 100.0f;
+              const int k = (int) hh;
+              const float f = hh - k, p = 1 - ss, q = 1 - ss * f, t = 1 - ss * (1 - f);
+              float R = 1, G = 1, B = 1;
+              switch (k) {
+                case 0: R = 1; G = t; B = p; break;
+                case 1: R = q; G = 1; B = p; break;
+                case 2: R = p; G = 1; B = t; break;
+                case 3: R = p; G = q; B = 1; break;
+                case 4: R = t; G = p; B = 1; break;
+                default: R = 1; G = p; B = q; break;
+              }
+              l += snprintf(m + l, cap - l, ",\"r\":%d,\"g\":%d,\"b\":%d", (int) (R * 255 + 0.5f), (int) (G * 255 + 0.5f), (int) (B * 255 + 0.5f));
             }
             snprintf(m + l, cap - l, "}}");
             id(sw_action) = 3;
