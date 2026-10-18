@@ -41,7 +41,7 @@ packages:
 
 Add your own `esphome:`, `api:` and `wifi:` blocks as usual. The relay id must be `relay_1`.
 
-The confirmation time is the adjustable entity **Tempo conferma Wiz** (500-4000 ms, default 1400; Home Assistant and web page). The `getPilot` confirmation uses 4/7 of it. Optional substitutions: `wiz_retry_ms`, `powercycle_ms`, `health_check_interval`, `poll_interval` (`wiz_deadline_ms` and `wiz_confirm_ms` still exist but default to the entity).
+The confirmation time is the adjustable entity **Tempo conferma Wiz** (500-4000 ms, default 1400; Home Assistant and web page). The `getPilot` confirmation uses 4/7 of it. Optional substitutions: `wiz_retry_ms`, `powercycle_ms`, `health_check_interval` (default 4s: polling delle Wiz), `poll_interval_ms`, `polling_ms` (`wiz_deadline_ms` and `wiz_confirm_ms` still exist but default to the entity).
 
 ## Input mode and push button
 
@@ -74,7 +74,7 @@ Pin packages to a tag (`@v3.3.0`), never `@main`. Running firmware is not affect
 - v1.1.0: on-colour fields next to each other, readable PWM help.
 - v1.0.0: first release.
 
-## Moduli (ramo `modularizzazione`, v4.0.0 sperimentale)
+## Moduli (ramo `modularizzazione`, v4.1.0 sperimentale)
 
 `packages/wiz-physical-failsafe.yaml` (monolitico, fino a v3.8.0) è stato diviso in moduli con comportamento identico (verificato: la configurazione risolta da `esphome config` coincide). Si includono con `files:`:
 
@@ -84,14 +84,13 @@ packages:
     url: https://github.com/Gionames/esphome-shelly-wiz-physical-failsafe
     ref: modularizzazione
     files:
-      - packages/wiz-core.yaml            # obbligatorio
+      - packages/wiz-core.yaml            # obbligatorio: comandi Wiz, failsafe (su comando e proattivo), azione wiz_set per HA, entità di stato del failsafe
       - packages/input.yaml               # obbligatorio per ora (da rendere generico)
       - packages/timer.yaml               # obbligatorio per ora (da rendere generico)
-      - packages/wiz-failsafe-status.yaml # opzionale
       - packages/wiz-diagnostics.yaml     # opzionale
       - packages/wifi-settings.yaml       # opzionale
       - packages/recovery-ap.yaml         # opzionale: AP + captive portal di recupero
       - packages/coil-pwm.yaml            # opzionale
 ```
 
-Verificate con `esphome config`: core+input+timer; più status; più diagnostics. Input e timer sono ancora referenziati dal codice del core: renderli opzionali richiede degli "hook" (prossimo passo). **Non provato su hardware.**
+Verificate con `esphome config`: core+input+timer; più diagnostics. (Le entità di stato del failsafe sono ora dentro il core.) Input e timer sono ancora referenziati dal codice del core: renderli opzionali richiede degli "hook" (prossimo passo). **Non provato su hardware.**
