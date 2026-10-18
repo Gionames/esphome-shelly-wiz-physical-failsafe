@@ -1,4 +1,4 @@
-# wiz-core.yaml (v4.0.0) - motore: comandi Wiz UDP, quorum, failsafe sul relè, luce, accensione, numeri di regolazione.
+# wiz-core.yaml (v4.1.0) - motore: comandi Wiz UDP, quorum, failsafe sul relè, luce, accensione, numeri di regolazione.
 # OBBLIGATORIO. Richiede i moduli input e timer (per ora il codice li referenzia).
 
 substitutions:
@@ -10,8 +10,9 @@ substitutions:
   wiz_deadline_ms: "((int) id(wiz_confirm_num).state)"   # tempo massimo per un comando di accensione/spegnimento: entità "Tempo conferma Wiz" (HA/pagina web)
   wiz_confirm_ms: "((int) id(wiz_confirm_num).state * 4 / 7)"   # tempo massimo per getPilot (conferma e lettura periodica): 4/7 di "Tempo conferma Wiz" (800 ms a 1400)
   powercycle_ms: "0"             # relè aperto per tanto se nessuna Wiz risponde ma è alimentata (0 = disattivato)
-  health_check_interval: "10s"   # con failsafe attivo, ogni quanto riprova a parlare con le Wiz
-  poll_interval: "30s"           # rilettura di sicurezza dello stato (la sottoscrizione lo tiene già aggiornato)
+  health_check_interval: "4s"    # ogni quanto controlla le Wiz: a luce accesa è la sonda del failsafe proattivo, con failsafe attivo prova a uscirne
+  poll_interval_ms: "30000"      # a luce spenta: rilettura di sicurezza dello stato ogni tanto (la sottoscrizione lo tiene già aggiornato)
+  probe_ms: "1000"               # tempo massimo di ogni sonda (getPilot) del failsafe proattivo, con rinvii ogni wiz_retry_ms
 
 globals:
   - id: failsafe_mode      # true = l'interruttore commuta il relè, le Wiz vengono ignorate
@@ -119,6 +120,23 @@ globals:
   - id: alt_cur           # il comando di accensione in corso usa i valori alternativi
     type: bool
     initial_value: "false"
+  - id: fs_proactive       # il failsafe è scattato da solo (sonda fallita a luce accesa), non per un comando: per uscirne basta leggere le Wiz
+    type: bool
+    initial_value: "false"
+  - id: probe_last         # millis() dell'ultima sonda
+    type: uint32_t
+    initial_value: "0"
+  - id: probe_lit          # la luce era accesa quando è partita la sonda
+    type: bool
+    initial_value: "false"
+  - id: probe_fail         # sonde fallite di fila
+    type: int
+    initial_value: "0"
+  - id: custom_msg         # comando setPilot personalizzato (azione wiz_set)
+    type: char[112]
+  - id: custom_bri         # luminosità del comando personalizzato (-1 = non specificata)
+    type: int
+    initial_value: "-1"
   - id: alt_on            # la combinazione alternativa è quella attualmente impostata sulle Wiz (la pressione lunga alterna)
     type: bool
     initial_value: "false"
@@ -131,6 +149,41 @@ esp32:
     sdkconfig_options:
       # socket per le Wiz: uno per i comandi e uno in ascolto per la sottoscrizione. Margine rispetto al calcolo automatico
       CONFIG_LWIP_MAX_SOCKETS: "20"
+
+# Comando dalla facciata di HA (esphome.<nodo>_wiz_set): luminosità e/o colore passano dallo stesso percorso dell'interruttore fisico,
+# quindi con conferma e failsafe. brightness 10-100 (0 = invariata); kelvin 2200-6500 oppure r,g,b 0-255 (0 = non specificati).
+api:
+  actions:
+    - action: wiz_set
+      variables:
+        brightness: int
+        kelvin: int
+        r: int
+        g: int
+        b: int
+      then:
+        - lambda: |-
+            char *m = &id(custom_msg)[0];
+            const size_t cap = 112;   // dimensione di custom_msg
+            size_t l = snprintf(m, cap, "{\"method\":\"setPilot\",\"params\":{\"state\":true");
+            int bri = brightness;
+            if (bri > 0) {
+              if (bri < 10) bri = 10;
+              if (bri > 100) bri = 100;
+              l += snprintf(m + l, cap - l, ",\"dimming\":%d", bri);
+              id(custom_bri) = bri;
+            } else {
+              id(custom_bri) = -1;
+            }
+            if (kelvin >= 2200 && kelvin <= 6500) {
+              l += snprintf(m + l, cap - l, ",\"temp\":%d", kelvin);
+            } else if (r > 0 || g > 0 || b > 0) {
+              auto c = [](int v) { return v < 0 ? 0 : (v > 255 ? 255 : v); };
+              l += snprintf(m + l, cap - l, ",\"r\":%d,\"g\":%d,\"b\":%d", c(r), c(g), c(b));
+            }
+            snprintf(m + l, cap - l, "}}");
+            id(sw_action) = 3;
+        - script.execute: sw_changed
 
 web_server:
   version: 3
@@ -242,7 +295,13 @@ switch:
     turn_on_action:
       - lambda: |-
           ESP_LOGW("wiz", "failsafe forzato da HA");
+          id(fs_proactive) = false;
           id(failsafe_mode) = true;
+    turn_off_action:
+      # tolto il forzato: se il relè è chiuso provo subito a uscire dal failsafe (Wiz raggiungibili); a relè aperto non tocco nulla,
+      # il failsafe si disattiva alla prossima chiusura del relè
+      - lambda: 'ESP_LOGI("wiz", "failsafe non più forzato");'
+      - script.execute: fs_recover
     web_server:
       sorting_group_id: grp_wiz
       sorting_weight: 71
@@ -342,6 +401,21 @@ number:
     web_server:
       sorting_group_id: grp_wiz
   - platform: template
+    name: "Failsafe on/off - Sonde fallite"
+    id: fs_probe_num
+    icon: mdi:shield-search
+    entity_category: config
+    min_value: 1
+    max_value: 5
+    step: 1
+    mode: box
+    optimistic: true
+    restore_value: true
+    initial_value: 1
+    web_server:
+      sorting_group_id: grp_wiz
+      sorting_weight: 75
+  - platform: template
     name: "Invii setPilot Wiz"
     id: wiz_sends_num
     icon: mdi:repeat
@@ -359,7 +433,7 @@ number:
 script:
   # Un comando UDP a tutte le lampade (porta 38899), NON bloccante: invia subito, poi controlla le
   # risposte ogni 15 ms lasciando girare il resto di ESPHome (API, BLE proxy, ESP-NOW).
-  #   kind 0 = getPilot, 1 = setPilot acceso, 2 = setPilot spento
+  #   kind 0 = getPilot, 1 = setPilot acceso, 2 = setPilot spento, 3 = setPilot acceso personalizzato (azione wiz_set)
   # Ogni retry_ms rimanda solo alle lampade che non hanno ancora risposto; finisce quando tutte
   # hanno risposto oppure dopo deadline_ms. Un comando nuovo annulla quello in corso.
   # Risultato: wiz_n_ok (quante hanno risposto), wiz_known / wiz_lit per lampada.
@@ -421,7 +495,7 @@ script:
             // un comando di accensione/spegnimento aggiorna subito lo stato atteso, senza aspettare gli ack:
             // così due azioni ravvicinate sull'interruttore si alternano correttamente
             if (kind > 0) {
-              id(wiz_lit)[i] = (kind == 1);
+              id(wiz_lit)[i] = (kind != 2);
               id(wiz_known)[i] = true;
             }
           }
@@ -450,6 +524,7 @@ script:
                   snprintf(on_msg, sizeof(on_msg), "{\"method\":\"setPilot\",\"params\":{\"state\":true,\"dimming\":%d,\"temp\":%d}}", bri, kel);
                   const char *msg = ck == 0 ? R"({"method":"getPilot","params":{}})"
                                   : ck == 1 ? (const char *) on_msg
+                                  : ck == 3 ? (const char *) &id(custom_msg)[0]
                                               : R"({"method":"setPilot","params":{"state":false}})";
                   for (int i = 0; i < n; i++) {
                     if (id(wiz_acked)[i]) continue;
@@ -486,7 +561,7 @@ script:
                     id(wiz_known)[i] = true;
                   } else {
                     if (strstr(buf, "setPilot") == nullptr || strstr(buf, "\"success\":true") == nullptr) continue;
-                    id(wiz_lit)[i] = (ck == 1);
+                    id(wiz_lit)[i] = (ck != 2);
                     id(wiz_known)[i] = true;
                   }
                   id(wiz_acked)[i] = true;
@@ -505,7 +580,7 @@ script:
                 }
                 if (ok == n || el >= (uint32_t) id(wiz_deadline)) {
                   id(wiz_n_ok) = ok;
-                  const char *kn = ck == 0 ? "getPilot" : ck == 1 ? "setPilot ON" : "setPilot OFF";
+                  const char *kn = ck == 0 ? "getPilot" : ck == 1 ? "setPilot ON" : ck == 3 ? "setPilot ON (wiz_set)" : "setPilot OFF";
                   if (ok < n) {
                     char miss[96];
                     size_t l = 0;
@@ -528,6 +603,36 @@ script:
                   id(wiz_busy) = false;
                 }
             - delay: 15ms
+  # in failsafe con relè chiuso (= luce accesa): le Wiz sono tornate? Se sì esco dal failsafe.
+  # Failsafe scattato da un comando (accensione fallita): le riaccendo con i valori di accensione. Failsafe proattivo (la luce era già accesa):
+  # basta leggerle, senza cambiare luminosità e colore che hanno adesso.
+  - id: fs_recover
+    mode: single
+    then:
+      - if:
+          condition:
+            lambda: 'return id(boot_done) && id(failsafe_mode) && id(relay_1).state && !id(wiz_busy);'
+          then:
+            - script.execute:
+                id: wiz_cmd
+                kind: !lambda 'return id(fs_proactive) ? 0 : 1;'
+                retry_ms: ${wiz_retry_ms}
+                deadline_ms: !lambda 'return id(fs_proactive) ? ${probe_ms} : ${wiz_deadline_ms};'
+            - wait_until:
+                condition:
+                  lambda: 'return !id(wiz_busy);'
+                timeout: 5s
+            - if:
+                condition:
+                  lambda: 'return id(wiz_n_ok) >= std::max(1, std::min(${wiz_quorum}, id(wiz_n)));'
+                then:
+                  - lambda: |-
+                      ESP_LOGI("wiz", "Wiz di nuovo raggiungibili: esco dal failsafe");
+                      if (!id(failsafe_forced).state) {
+                        id(failsafe_mode) = false;
+                        id(fs_proactive) = false;
+                        id(probe_fail) = 0;
+                      }
   - id: sw_changed
     mode: restart
     then:
@@ -538,9 +643,10 @@ script:
             # failsafe, oppure relè già aperto: l'azione commuta il relè, senza aspettare nessuno
             - lambda: |-
                 if (!id(failsafe_mode)) ESP_LOGW("wiz", "relè aperto: passo in failsafe");
+                id(fs_proactive) = false;
                 id(failsafe_mode) = true;
             - lambda: |-
-                if (id(sw_action) == 1) id(relay_1).turn_on();
+                if (id(sw_action) == 1 || id(sw_action) == 3) id(relay_1).turn_on();
                 else if (id(sw_action) == 2) id(relay_1).turn_off();
                 else id(relay_1).toggle();
           else:
@@ -568,10 +674,16 @@ script:
                 for (int i = 0; i < id(wiz_n); i++) {
                   if (id(wiz_known)[i] && id(wiz_lit)[i]) any = true;
                 }
-                id(want_on) = id(sw_action) == 1 ? true : (id(sw_action) == 2 ? false : !any);
+                id(want_on) = (id(sw_action) == 1 || id(sw_action) == 3) ? true : (id(sw_action) == 2 ? false : !any);
             - script.execute:
                 id: wiz_cmd
                 kind: !lambda |-
+                  if (id(sw_action) == 3) {      // wiz_set: valori personalizzati, non quelli di accensione
+                    id(alt_cur) = false;
+                    id(alt_on) = false;
+                    id(alt_req) = false;
+                    return 3;
+                  }
                   id(alt_cur) = id(want_on) && id(alt_req);
                   id(alt_on) = id(alt_cur);
                   id(alt_req) = false;
@@ -607,6 +719,7 @@ script:
                 then:
                   - lambda: |-
                       ESP_LOGW("wiz", "Wiz non risponde (%d, minimo %d): failsafe", id(wiz_n_ok), std::max(1, std::min(${wiz_quorum}, id(wiz_n))));
+                      id(fs_proactive) = false;
                       id(failsafe_mode) = true;
                   - if:
                       condition:
@@ -714,13 +827,14 @@ interval:
                   // un comando in corso per questa lampada: lo stato atteso vale più di un messaggio che può essere precedente
                   // (la risposta diretta al comando può essere lenta o persa: se la sottoscrizione mostra già lo stato voluto, vale come conferma)
                   if (id(wiz_busy) && id(wiz_kind) > 0 && !id(wiz_acked)[i]) {
-                    const bool want = (id(wiz_kind) == 1);
+                    const bool want = (id(wiz_kind) != 2);
                     bool match = ((p[8] == 't') == want);
                     if (match && want) {
                       const char *dp = strstr(buf, "\"dimming\":");
                       int bri = (int) (id(alt_cur) ? id(wiz_alt_brightness).state : id(wiz_on_brightness).state);
                       if (bri < 10 || bri > 100) bri = 100;
-                      if (dp != nullptr && abs(atoi(dp + 10) - bri) > 1) match = false;
+                      if (id(wiz_kind) == 3) bri = id(custom_bri);   // personalizzato: -1 = luminosità non specificata, non controllo
+                      if (bri >= 0 && dp != nullptr && abs(atoi(dp + 10) - bri) > 1) match = false;
                     }
                     if (match) {
                       const uint32_t el = now - id(wiz_t0);
@@ -763,41 +877,49 @@ interval:
                       kind: 0
                       retry_ms: ${wiz_retry_ms}
                       deadline_ms: !lambda 'return ${wiz_confirm_ms};'
-  # Wiz raggiungibili: tiene aggiornato lo stato noto (cambiato da app, HA, Alexa...)
-  - interval: ${poll_interval}
+  # sonda delle Wiz (ogni health_check_interval):
+  #  - luce accesa: getPilot; se le Wiz non rispondono per "Failsafe on/off - Sonde fallite" volte di fila scatta il failsafe PROATTIVO
+  #    (il relè diventa un interruttore diretto), senza aspettare un comando. Così la pressione successiva è già immediata
+  #  - luce spenta: solo una lettura di sicurezza ogni poll_interval_ms, senza failsafe (le Wiz in standby possono restare irraggiungibili)
+  - interval: ${health_check_interval}
     then:
       - if:
           condition:
-            lambda: 'return id(boot_done) && !id(failsafe_mode) && id(relay_1).state && !id(wiz_busy);'
+            lambda: |-
+              if (!id(boot_done) || id(failsafe_mode) || !id(relay_1).state || id(wiz_busy)) return false;
+              bool lit = false;
+              for (int i = 0; i < id(wiz_n); i++) {
+                if (id(wiz_known)[i] && id(wiz_lit)[i]) lit = true;
+              }
+              if (!lit && (uint32_t) (millis() - id(probe_last)) < ${poll_interval_ms}) return false;
+              id(probe_lit) = lit;
+              id(probe_last) = millis();
+              return true;
           then:
             - script.execute:
                 id: wiz_cmd
                 kind: 0
                 retry_ms: ${wiz_retry_ms}
-                deadline_ms: !lambda 'return ${wiz_confirm_ms};'
-  # in failsafe con relè chiuso (= luce accesa): le Wiz sono tornate? Se sì le accendo e esco dal failsafe
-  - interval: ${health_check_interval}
-    then:
-      - if:
-          condition:
-            lambda: 'return id(boot_done) && id(failsafe_mode) && id(relay_1).state && !id(wiz_busy);'
-          then:
-            - script.execute:
-                id: wiz_cmd
-                kind: 1
-                retry_ms: ${wiz_retry_ms}
-                deadline_ms: !lambda 'return ${wiz_deadline_ms};'
+                deadline_ms: ${probe_ms}
             - wait_until:
                 condition:
                   lambda: 'return !id(wiz_busy);'
                 timeout: 5s
-            - if:
-                condition:
-                  lambda: 'return id(wiz_n_ok) >= std::max(1, std::min(${wiz_quorum}, id(wiz_n)));'
-                then:
-                  - lambda: |-
-                      ESP_LOGI("wiz", "Wiz di nuovo raggiungibili: esco dal failsafe");
-                      if (!id(failsafe_forced).state) id(failsafe_mode) = false;
+            - lambda: |-
+                if (id(wiz_n_ok) >= std::max(1, std::min(${wiz_quorum}, id(wiz_n)))) {
+                  id(probe_fail) = 0;
+                  return;
+                }
+                if (!id(probe_lit) || id(failsafe_mode)) return;
+                id(probe_fail)++;
+                ESP_LOGW("wiz", "sonda Wiz fallita (%d, risposte %d): failsafe dopo %d", id(probe_fail), id(wiz_n_ok), (int) id(fs_probe_num).state);
+                if (id(probe_fail) >= (int) id(fs_probe_num).state) {
+                  ESP_LOGW("wiz", "Wiz non raggiungibili a luce accesa: failsafe proattivo");
+                  id(probe_fail) = 0;
+                  id(fs_proactive) = true;
+                  id(failsafe_mode) = true;
+                }
+      - script.execute: fs_recover
   # stato della luce dopo un'interruzione di corrente: solo accensione/brownout, non dopo un riavvio software o OTA.
   # Aspetta 15 s perché le Wiz tornino in rete.
   - interval: 1s
