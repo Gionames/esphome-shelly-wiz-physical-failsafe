@@ -1,18 +1,19 @@
-# wiz-core.yaml (v4.1.0) - motore: comandi Wiz UDP, quorum, failsafe sul relè, luce, accensione, numeri di regolazione.
+# wiz-core.yaml (v4.1.0) - modulo unico: comandi Wiz UDP (anche da HA: azione wiz_set), quorum, failsafe sul relè (su comando e proattivo),
+# luce, accensione, numeri di regolazione, entità di stato del failsafe.
 # OBBLIGATORIO. Richiede i moduli input e timer (per ora il codice li referenzia).
 
 substitutions:
   wiz_input_id: "switch_input"
   wiz_group_name: "Luce"
   # --- failsafe Wiz ---
-  wiz_quorum: "((int) id(wiz_quorum_num).state)"   # ora regolabile da HA/pagina web: entità "Quorum Wiz"
+  wiz_need: "std::max(1, std::min((int) id(wiz_quorum_num).state, id(wiz_n)))"   # lampade che devono rispondere (entità "Quorum Wiz", regolabile da HA/pagina web), mai più di quelle configurate
   wiz_retry_ms: "400"            # ogni quanto rimanda il comando alle lampade che non hanno ancora risposto
   wiz_deadline_ms: "((int) id(wiz_confirm_num).state)"   # tempo massimo per un comando di accensione/spegnimento: entità "Tempo conferma Wiz" (HA/pagina web)
   wiz_confirm_ms: "((int) id(wiz_confirm_num).state * 4 / 7)"   # tempo massimo per getPilot (conferma e lettura periodica): 4/7 di "Tempo conferma Wiz" (800 ms a 1400)
   powercycle_ms: "0"             # relè aperto per tanto se nessuna Wiz risponde ma è alimentata (0 = disattivato)
-  health_check_interval: "4s"    # ogni quanto controlla le Wiz: a luce accesa è la sonda del failsafe proattivo, con failsafe attivo prova a uscirne
+  health_check_interval: "4s"    # ogni quanto controlla le Wiz: a luce accesa è il polling del failsafe proattivo, con failsafe attivo prova a uscirne
   poll_interval_ms: "30000"      # a luce spenta: rilettura di sicurezza dello stato ogni tanto (la sottoscrizione lo tiene già aggiornato)
-  probe_ms: "1000"               # tempo massimo di ogni sonda (getPilot) del failsafe proattivo, con rinvii ogni wiz_retry_ms
+  polling_ms: "1000"               # tempo massimo di ogni polling (getPilot) del failsafe proattivo, con rinvii ogni wiz_retry_ms
 
 globals:
   - id: failsafe_mode      # true = l'interruttore commuta il relè, le Wiz vengono ignorate
@@ -120,16 +121,16 @@ globals:
   - id: alt_cur           # il comando di accensione in corso usa i valori alternativi
     type: bool
     initial_value: "false"
-  - id: fs_proactive       # il failsafe è scattato da solo (sonda fallita a luce accesa), non per un comando: per uscirne basta leggere le Wiz
+  - id: fs_proactive       # il failsafe è scattato da solo (polling fallito a luce accesa), non per un comando: per uscirne basta leggere le Wiz
     type: bool
     initial_value: "false"
-  - id: probe_last         # millis() dell'ultima sonda
+  - id: poll_last         # millis() dell'ultimo polling
     type: uint32_t
     initial_value: "0"
-  - id: probe_lit          # la luce era accesa quando è partita la sonda
+  - id: poll_lit          # la luce era accesa quando è partito il polling
     type: bool
     initial_value: "false"
-  - id: probe_fail         # sonde fallite di fila
+  - id: poll_fail         # polling falliti di fila
     type: int
     initial_value: "0"
   - id: custom_msg         # comando setPilot personalizzato (azione wiz_set)
@@ -254,6 +255,24 @@ binary_sensor:
     on_state:
       - lambda: 'if (id(pon_done)) id(light_last) = x;'
 
+  - platform: template
+    name: "Failsafe on/off"
+    id: failsafe_active
+    icon: mdi:shield-alert-outline
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: grp_wiz
+      sorting_weight: 70
+    lambda: 'return id(failsafe_mode);'
+    on_press:
+      - lambda: |-
+          id(fs_count) += 1;
+          auto t = id(ha_time).now();
+          if (t.is_valid()) id(fs_last_epoch) = (uint32_t) t.timestamp;
+          id(fs_count_sensor).update();
+          id(fs_last_text).update();
+
+# --- stato del failsafe (attivo, contatore, ultima attivazione, nota): fanno parte del meccanismo, un modulo unico ---
 sensor:
   # quante lampade hanno risposto all'ultimo comando (si aggiorna solo quando cambia)
   - platform: template
@@ -264,6 +283,46 @@ sensor:
     accuracy_decimals: 0
     entity_category: diagnostic
     update_interval: never
+
+  - platform: template
+    name: "Failsafe on/off - Attivazioni"
+    id: fs_count_sensor
+    icon: mdi:counter
+    accuracy_decimals: 0
+    state_class: total_increasing
+    entity_category: diagnostic
+    update_interval: 60s
+    lambda: 'return (float) id(fs_count);'
+    web_server:
+      sorting_group_id: grp_wiz
+      sorting_weight: 73
+
+text_sensor:
+  - platform: template
+    name: "Failsafe on/off - Nota"
+    id: failsafe_note
+    icon: mdi:information-outline
+    entity_category: diagnostic
+    update_interval: 1s
+    web_server:
+      sorting_group_id: grp_wiz
+      sorting_weight: 72
+    lambda: |-
+      if (id(failsafe_mode) && !id(failsafe_forced).state && !id(relay_1).state)
+        return std::string("Si disattiva alla chiusura relè");
+      return std::string("");
+  - platform: template
+    name: "Failsafe on/off - Ultima attivazione"
+    id: fs_last_text
+    icon: mdi:history
+    entity_category: diagnostic
+    update_interval: 60s
+    lambda: |-
+      if (id(fs_last_epoch) == 0) return {"mai"};
+      return ESPTime::from_epoch_local(id(fs_last_epoch)).strftime("%d/%m/%Y %H:%M:%S");
+    web_server:
+      sorting_group_id: grp_wiz
+      sorting_weight: 74
 
 switch:
   - platform: template
@@ -401,8 +460,8 @@ number:
     web_server:
       sorting_group_id: grp_wiz
   - platform: template
-    name: "Failsafe on/off - Sonde fallite"
-    id: fs_probe_num
+    name: "Failsafe on/off - Polling"
+    id: fs_poll_num
     icon: mdi:shield-search
     entity_category: config
     min_value: 1
@@ -617,21 +676,21 @@ script:
                 id: wiz_cmd
                 kind: !lambda 'return id(fs_proactive) ? 0 : 1;'
                 retry_ms: ${wiz_retry_ms}
-                deadline_ms: !lambda 'return id(fs_proactive) ? ${probe_ms} : ${wiz_deadline_ms};'
+                deadline_ms: !lambda 'return id(fs_proactive) ? ${polling_ms} : ${wiz_deadline_ms};'
             - wait_until:
                 condition:
                   lambda: 'return !id(wiz_busy);'
                 timeout: 5s
             - if:
                 condition:
-                  lambda: 'return id(wiz_n_ok) >= std::max(1, std::min(${wiz_quorum}, id(wiz_n)));'
+                  lambda: 'return id(wiz_n_ok) >= ${wiz_need};'
                 then:
                   - lambda: |-
                       ESP_LOGI("wiz", "Wiz di nuovo raggiungibili: esco dal failsafe");
                       if (!id(failsafe_forced).state) {
                         id(failsafe_mode) = false;
                         id(fs_proactive) = false;
-                        id(probe_fail) = 0;
+                        id(poll_fail) = 0;
                       }
   - id: sw_changed
     mode: restart
@@ -697,7 +756,7 @@ script:
             # troppo poche risposte: prima di arrendermi chiedo lo stato (se rispondono, è solo un comando perso)
             - if:
                 condition:
-                  lambda: 'return id(wiz_n_ok) < std::max(1, std::min(${wiz_quorum}, id(wiz_n)));'
+                  lambda: 'return id(wiz_n_ok) < ${wiz_need};'
                 then:
                   - script.execute:
                       id: wiz_cmd
@@ -710,15 +769,15 @@ script:
                       timeout: 5s
                   - if:
                       condition:
-                        lambda: 'return id(wiz_n_ok) >= std::max(1, std::min(${wiz_quorum}, id(wiz_n)));'
+                        lambda: 'return id(wiz_n_ok) >= ${wiz_need};'
                       then:
                         - lambda: 'ESP_LOGW("wiz", "comando senza ack sufficienti ma le Wiz rispondono (%d): nessun failsafe", id(wiz_n_ok));'
             - if:
                 condition:
-                  lambda: 'return id(wiz_n_ok) < std::max(1, std::min(${wiz_quorum}, id(wiz_n)));'
+                  lambda: 'return id(wiz_n_ok) < ${wiz_need};'
                 then:
                   - lambda: |-
-                      ESP_LOGW("wiz", "Wiz non risponde (%d, minimo %d): failsafe", id(wiz_n_ok), std::max(1, std::min(${wiz_quorum}, id(wiz_n))));
+                      ESP_LOGW("wiz", "Wiz non risponde (%d, minimo %d): failsafe", id(wiz_n_ok), ${wiz_need});
                       id(fs_proactive) = false;
                       id(failsafe_mode) = true;
                   - if:
@@ -877,8 +936,8 @@ interval:
                       kind: 0
                       retry_ms: ${wiz_retry_ms}
                       deadline_ms: !lambda 'return ${wiz_confirm_ms};'
-  # sonda delle Wiz (ogni health_check_interval):
-  #  - luce accesa: getPilot; se le Wiz non rispondono per "Failsafe on/off - Sonde fallite" volte di fila scatta il failsafe PROATTIVO
+  # polling delle Wiz (ogni health_check_interval):
+  #  - luce accesa: getPilot; se le Wiz non rispondono per "Failsafe on/off - Polling" volte di fila scatta il failsafe PROATTIVO
   #    (il relè diventa un interruttore diretto), senza aspettare un comando. Così la pressione successiva è già immediata
   #  - luce spenta: solo una lettura di sicurezza ogni poll_interval_ms, senza failsafe (le Wiz in standby possono restare irraggiungibili)
   - interval: ${health_check_interval}
@@ -891,31 +950,31 @@ interval:
               for (int i = 0; i < id(wiz_n); i++) {
                 if (id(wiz_known)[i] && id(wiz_lit)[i]) lit = true;
               }
-              if (!lit && (uint32_t) (millis() - id(probe_last)) < ${poll_interval_ms}) return false;
-              id(probe_lit) = lit;
-              id(probe_last) = millis();
+              if (!lit && (uint32_t) (millis() - id(poll_last)) < ${poll_interval_ms}) return false;
+              id(poll_lit) = lit;
+              id(poll_last) = millis();
               return true;
           then:
             - script.execute:
                 id: wiz_cmd
                 kind: 0
                 retry_ms: ${wiz_retry_ms}
-                deadline_ms: ${probe_ms}
+                deadline_ms: ${polling_ms}
             - wait_until:
                 condition:
                   lambda: 'return !id(wiz_busy);'
                 timeout: 5s
             - lambda: |-
-                if (id(wiz_n_ok) >= std::max(1, std::min(${wiz_quorum}, id(wiz_n)))) {
-                  id(probe_fail) = 0;
+                if (id(wiz_n_ok) >= ${wiz_need}) {
+                  id(poll_fail) = 0;
                   return;
                 }
-                if (!id(probe_lit) || id(failsafe_mode)) return;
-                id(probe_fail)++;
-                ESP_LOGW("wiz", "sonda Wiz fallita (%d, risposte %d): failsafe dopo %d", id(probe_fail), id(wiz_n_ok), (int) id(fs_probe_num).state);
-                if (id(probe_fail) >= (int) id(fs_probe_num).state) {
+                if (!id(poll_lit) || id(failsafe_mode)) return;
+                id(poll_fail)++;
+                ESP_LOGW("wiz", "polling Wiz fallito (%d, risposte %d): failsafe dopo %d", id(poll_fail), id(wiz_n_ok), (int) id(fs_poll_num).state);
+                if (id(poll_fail) >= (int) id(fs_poll_num).state) {
                   ESP_LOGW("wiz", "Wiz non raggiungibili a luce accesa: failsafe proattivo");
-                  id(probe_fail) = 0;
+                  id(poll_fail) = 0;
                   id(fs_proactive) = true;
                   id(failsafe_mode) = true;
                 }
