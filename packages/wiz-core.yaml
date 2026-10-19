@@ -399,6 +399,14 @@ light:
           id(wl_cmd_t) = millis();
           if (!rv.is_on()) {
             id(wiz_request).execute(false, -1, 0, -1, -1, -1);
+            // la prossima accensione "semplice" (HA, voce, PWA, senza valori espliciti) riparte da 2700 K / 100 %
+            auto &rm = id(wiz_light)->remote_values;
+            rm.set_color_mode(light::ColorMode::COLD_WARM_WHITE);
+            rm.set_brightness(1.0f);
+            rm.set_color_brightness(1.0f);
+            rm.set_color_temperature(370.0f);
+            rm.set_cold_white(0.3885f);
+            rm.set_warm_white(1.0f);
             return;
           }
           const int bri = (int) (rv.get_brightness() * 100.0f + 0.5f);
