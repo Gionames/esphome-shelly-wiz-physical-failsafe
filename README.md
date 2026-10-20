@@ -74,7 +74,7 @@ Pin packages to a tag (`@v3.3.0`), never `@main`. Running firmware is not affect
 - v1.1.0: on-colour fields next to each other, readable PWM help.
 - v1.0.0: first release.
 
-## Moduli (ramo `modularizzazione`, v4.1.0 sperimentale)
+## Moduli (ramo `modularizzazione`, v4.2.0 sperimentale)
 
 `packages/wiz-physical-failsafe.yaml` (monolitico, fino a v3.8.0) è stato diviso in moduli con comportamento identico (verificato: la configurazione risolta da `esphome config` coincide). Si includono con `files:`:
 
@@ -84,7 +84,7 @@ packages:
     url: https://github.com/Gionames/esphome-shelly-wiz-physical-failsafe
     ref: modularizzazione
     files:
-      - packages/wiz-core.yaml            # obbligatorio: comandi Wiz, failsafe (su comando e proattivo), azione wiz_set per HA, entità di stato del failsafe
+      - packages/wiz-core.yaml            # obbligatorio: comandi Wiz, failsafe (su comando e proattivo), entità di stato del failsafe
       - packages/input.yaml               # obbligatorio per ora (da rendere generico)
       - packages/timer.yaml               # obbligatorio per ora (da rendere generico)
       - packages/wiz-diagnostics.yaml     # opzionale
