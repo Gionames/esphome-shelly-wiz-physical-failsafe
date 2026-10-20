@@ -1,5 +1,5 @@
-# wiz-core.yaml (v4.1.0) - modulo unico: comandi Wiz UDP (anche da HA: azione wiz_set), quorum, failsafe sul relè (su comando e proattivo),
-# luce, accensione, numeri di regolazione, entità di stato del failsafe.
+# wiz-core.yaml (v4.2.0) - modulo unico: comandi Wiz UDP, quorum, failsafe sul relè (su comando e proattivo),
+# luce nativa per HA, accensione, numeri di regolazione, entità di stato del failsafe.
 # OBBLIGATORIO. Richiede i moduli input e timer (per ora il codice li referenzia).
 
 substitutions:
@@ -51,7 +51,7 @@ globals:
   - id: wiz_sock
     type: esphome::socket::Socket *
     initial_value: "nullptr"
-  - id: wiz_kind           # 0 = getPilot, 1 = setPilot acceso, 2 = setPilot spento
+  - id: wiz_kind           # 0 = getPilot, 1 = setPilot acceso, 2 = setPilot spento, 3 = setPilot acceso con i valori della luce di HA
     type: int
     initial_value: "0"
   - id: wiz_retry
@@ -79,10 +79,8 @@ globals:
   - id: wiz_reg_t          # istante dell'ultima registrazione
     type: uint32_t
     initial_value: "0"
-  - id: wiz_seen           # ultimo messaggio ricevuto da ogni lampada (ms)
-    type: uint32_t[8]
   # --- ingresso, timer, stato all'accensione, statistiche failsafe ---
-  - id: sw_action          # azione richiesta a sw_changed: 0 = commuta, 1 = accendi, 2 = spegni
+  - id: sw_action          # azione richiesta a sw_changed: 0 = commuta, 1 = accendi, 2 = spegni, 3 = accendi con valori della luce di HA (custom_msg)
     type: int
     initial_value: "0"
   - id: tmr_kind           # timer in corso: 0 = nessuno, 1 = auto-off, 2 = auto-on
@@ -149,7 +147,7 @@ globals:
   - id: wl_cmd_t           # millis() dell'ultimo comando arrivato da HA: per qualche secondo non riallineo la luce alle Wiz
     type: uint32_t
     initial_value: "0"
-  - id: custom_msg         # comando setPilot personalizzato (wiz_request)
+  - id: custom_msg         # comando setPilot con i valori della luce di HA (wiz_request)
     type: char[112]
   - id: custom_bri         # luminosità del comando personalizzato (-1 = non specificata)
     type: int
@@ -158,52 +156,11 @@ globals:
     type: bool
     initial_value: "false"
 
-# --- Modalità input selezionabile da HA (senza riflash) ---
-# Stesse modalità dello Shelly: Flip, Momentary, Follow, Activate, Detached (vedi handler nello specchio)
-
 esp32:
   framework:
     sdkconfig_options:
       # socket per le Wiz: uno per i comandi e uno in ascolto per la sottoscrizione. Margine rispetto al calcolo automatico
       CONFIG_LWIP_MAX_SOCKETS: "20"
-
-# Comando da HA: la luce nativa "Luce Wiz" (sotto) è il modo normale; esphome.<nodo>_wiz_set è lo stesso comando come servizio, per
-# script e automazioni. Entrambi passano da wiz_request (e quindi da sw_changed: conferma, failsafe, relè).
-# Parametri: power (false = spegni); brightness 1-255 (scala HA, -1 = invariata); hue 0-360 e sat 0-100 (colore, -1 = invariato);
-# kelvin 2200-6500 (temperatura colore, 0 = invariata). Solo power=true senza altri valori = accensione normale.
-api:
-  actions:
-    - action: wiz_set
-      variables:
-        power: bool
-        brightness: int
-        hue: int
-        sat: int
-        kelvin: int
-      then:
-        - lambda: |-
-            int bri = brightness > 0 ? (brightness * 100 + 127) / 255 : -1;
-            int r = -1, g = -1, b = -1;
-            if (hue >= 0 && sat >= 0) {
-              // colore da tonalità e saturazione (luminosità piena: la regola "bri")
-              const float hh = fmodf((float) hue, 360.0f) / 60.0f, ss = std::min<int>(100, (int) sat) / 100.0f;
-              const int k = (int) hh;
-              const float f = hh - k, p = 1 - ss, q = 1 - ss * f, t = 1 - ss * (1 - f);
-              float R = 1, G = 1, B = 1;
-              switch (k) {
-                case 0: R = 1; G = t; B = p; break;
-                case 1: R = q; G = 1; B = p; break;
-                case 2: R = p; G = 1; B = t; break;
-                case 3: R = p; G = q; B = 1; break;
-                case 4: R = t; G = p; B = 1; break;
-                default: R = 1; G = p; B = q; break;
-              }
-              r = (int) (R * 255 + 0.5f);
-              g = (int) (G * 255 + 0.5f);
-              b = (int) (B * 255 + 0.5f);
-            }
-            id(wl_cmd_t) = millis();
-            id(wiz_request).execute(power, bri, kelvin, r, g, b);
 
 web_server:
   version: 3
@@ -326,10 +283,15 @@ text_sensor:
     web_server:
       sorting_group_id: grp_wiz
       sorting_weight: 72
+    # pubblica solo quando il testo cambia (prima ripubblicava ogni secondo: traffico inutile verso API e pagina web)
     lambda: |-
-      if (id(failsafe_mode) && !id(failsafe_forced).state && !id(relay_1).state)
-        return std::string("Si disattiva alla chiusura relè");
-      return std::string("");
+      static std::string last;
+      static bool first = true;
+      const std::string t = (id(failsafe_mode) && !id(failsafe_forced).state && !id(relay_1).state) ? std::string("Si disattiva alla chiusura relè") : std::string("");
+      if (!first && t == last) return {};
+      first = false;
+      last = t;
+      return t;
   - platform: template
     name: "Failsafe on/off - Ultima attivazione"
     id: fs_last_text
@@ -343,32 +305,12 @@ text_sensor:
       sorting_group_id: grp_wiz
       sorting_weight: 74
 
-# Luce nativa per HA: una sola entità light.* (on/off, luminosità, colore, temperatura). Le "uscite" sono finte: la luce serve solo a
+# Luce nativa per HA: una sola entità light.* (on/off, luminosità, colore, temperatura). L'"uscita" è finta (una sola, usata per tutti i canali): la luce serve solo a
 # dichiarare a HA cosa sa fare. Ogni cambio di HA diventa un comando wiz_request (conferma e failsafe come il pulsante fisico),
 # e lo stato mostrato è la media delle Wiz della stanza (vedi l'intervallo "allinea luce" più sotto).
 output:
   - platform: template
-    id: wl_out_r
-    type: float
-    write_action:
-      - lambda: '(void) state;'
-  - platform: template
-    id: wl_out_g
-    type: float
-    write_action:
-      - lambda: '(void) state;'
-  - platform: template
-    id: wl_out_b
-    type: float
-    write_action:
-      - lambda: '(void) state;'
-  - platform: template
-    id: wl_out_c
-    type: float
-    write_action:
-      - lambda: '(void) state;'
-  - platform: template
-    id: wl_out_w
+    id: wl_out
     type: float
     write_action:
       - lambda: '(void) state;'
@@ -378,11 +320,11 @@ light:
     name: "Luce Wiz"
     id: wiz_light
     icon: mdi:lightbulb
-    red: wl_out_r
-    green: wl_out_g
-    blue: wl_out_b
-    cold_white: wl_out_c
-    warm_white: wl_out_w
+    red: wl_out
+    green: wl_out
+    blue: wl_out
+    cold_white: wl_out
+    warm_white: wl_out
     cold_white_color_temperature: 6500 K
     warm_white_color_temperature: 2200 K
     color_interlock: true
@@ -399,14 +341,6 @@ light:
           id(wl_cmd_t) = millis();
           if (!rv.is_on()) {
             id(wiz_request).execute(false, -1, 0, -1, -1, -1);
-            // la prossima accensione "semplice" (HA, voce, PWA, senza valori espliciti) riparte da 2700 K / 100 %
-            auto &rm = id(wiz_light)->remote_values;
-            rm.set_color_mode(light::ColorMode::COLD_WARM_WHITE);
-            rm.set_brightness(1.0f);
-            rm.set_color_brightness(1.0f);
-            rm.set_color_temperature(370.0f);
-            rm.set_cold_white(0.3885f);
-            rm.set_warm_white(1.0f);
             return;
           }
           const int bri = (int) (rv.get_brightness() * 100.0f + 0.5f);
@@ -572,7 +506,7 @@ number:
 script:
   # Un comando UDP a tutte le lampade (porta 38899), NON bloccante: invia subito, poi controlla le
   # risposte ogni 15 ms lasciando girare il resto di ESPHome (API, BLE proxy, ESP-NOW).
-  #   kind 0 = getPilot, 1 = setPilot acceso, 2 = setPilot spento, 3 = setPilot acceso personalizzato (azione wiz_set)
+  #   kind 0 = getPilot, 1 = setPilot acceso, 2 = setPilot spento, 3 = setPilot acceso con i valori della luce di HA (custom_msg)
   # Ogni retry_ms rimanda solo alle lampade che non hanno ancora risposto; finisce quando tutte
   # hanno risposto oppure dopo deadline_ms. Un comando nuovo annulla quello in corso.
   # Risultato: wiz_n_ok (quante hanno risposto), wiz_known / wiz_lit per lampada.
@@ -735,7 +669,7 @@ script:
                 }
                 if (ok == n || el >= (uint32_t) id(wiz_deadline)) {
                   id(wiz_n_ok) = ok;
-                  const char *kn = ck == 0 ? "getPilot" : ck == 1 ? "setPilot ON" : ck == 3 ? "setPilot ON (wiz_set)" : "setPilot OFF";
+                  const char *kn = ck == 0 ? "getPilot" : ck == 1 ? "setPilot ON" : ck == 3 ? "setPilot ON (HA)" : "setPilot OFF";
                   if (ok < n) {
                     char miss[96];
                     size_t l = 0;
@@ -758,7 +692,7 @@ script:
                   id(wiz_busy) = false;
                 }
             - delay: 15ms
-  # Richiesta di comando (dalla luce di HA o da wiz_set): costruisce il comando e lo passa a sw_changed, lo stesso percorso del pulsante fisico.
+  # Richiesta di comando (dalla luce di HA): costruisce il comando e lo passa a sw_changed, lo stesso percorso del pulsante fisico.
   # power false = spegni; bri 1-100 % (-1 = invariata); kelvin 2200-6500 (0 = invariata) oppure r,g,b 0-255 (-1 = non specificati).
   # Senza valori = accensione normale con i valori di accensione.
   - id: wiz_request
@@ -877,7 +811,7 @@ script:
             - script.execute:
                 id: wiz_cmd
                 kind: !lambda |-
-                  if (id(sw_action) == 3) {      // wiz_set: valori personalizzati, non quelli di accensione
+                  if (id(sw_action) == 3) {      // valori della luce di HA, non quelli di accensione
                     id(alt_cur) = false;
                     id(alt_on) = false;
                     id(alt_req) = false;
@@ -1015,7 +949,6 @@ interval:
                     if (id(wiz_ip32)[j] == src) { i = j; break; }
                   }
                   if (i < 0) continue;
-                  id(wiz_seen)[i] = now;
                   if (strstr(buf, "\"method\":\"registration\"") != nullptr) {
                     if (strstr(buf, "\"success\":true") == nullptr) ESP_LOGW("wiz", "registrazione rifiutata dalla Wiz %d", i + 1);
                     continue;
@@ -1204,6 +1137,3 @@ interval:
           if (!want && !id(light_on_sensor).state) return;
           id(sw_action) = want ? 1 : 2;
           id(sw_changed).execute();
-
-
-# Luce: la stessa logica dell'interruttore fisico (Wiz, e failsafe sul relè se non rispondono), comandabile da HA
