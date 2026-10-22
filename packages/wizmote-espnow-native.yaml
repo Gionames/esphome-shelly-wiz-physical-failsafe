@@ -1,0 +1,45 @@
+# WiZmote via ESP-NOW nativo (sostituisce il componente esterno di jesserockz).
+# Richiede la substitution ${name} nel YAML principale: viene inviata nell'evento
+# come campo "antenna", per capire in HA quale dispositivo ha ricevuto il comando.
+# Funziona con qualunque telecomando WiZmote (non registrato come peer): on_unknown_peer.
+globals:
+  - id: wizmote_last_seq
+    type: std::map<uint64_t, uint32_t>
+
+script:
+  - id: wizmote_event
+    mode: queued
+    parameters:
+      mac: string
+      button: int
+      sequence: string
+    then:
+      - homeassistant.event:
+          event: esphome.wizmote_action
+          data:
+            mac: !lambda 'return mac;'
+            button: !lambda 'return to_string(button);'
+            sequence: !lambda 'return sequence;'
+            antenna: ${name}
+
+espnow:
+  on_unknown_peer:
+    - lambda: |-
+        // pacchetto WiZmote standard: 13 byte
+        if (size < 13 || size > 20) return;
+        // tipo dato "tasto" 0x20 e "batteria" 0x01
+        if (data[5] != 0x20 || data[7] != 0x01) return;
+        uint32_t seq = (uint32_t) data[1] | ((uint32_t) data[2] << 8) |
+                       ((uint32_t) data[3] << 16) | ((uint32_t) data[4] << 24);
+        uint64_t key = 0;
+        for (int i = 0; i < 6; i++) key = (key << 8) | info.src_addr[i];
+        auto it = id(wizmote_last_seq).find(key);
+        if (it != id(wizmote_last_seq).end() && it->second == seq) return;  // dedup per MAC
+        id(wizmote_last_seq)[key] = seq;
+        char mac[13];
+        snprintf(mac, sizeof(mac), "%02x%02x%02x%02x%02x%02x",
+                 info.src_addr[0], info.src_addr[1], info.src_addr[2],
+                 info.src_addr[3], info.src_addr[4], info.src_addr[5]);
+        // una riga di log per pressione (dopo la deduplica)
+        ESP_LOGI("wizmote", "mac=%s btn=%d seq=%u", mac, (int) data[6], (unsigned) seq);
+        id(wizmote_event).execute(std::string(mac), (int) data[6], std::to_string(seq));
