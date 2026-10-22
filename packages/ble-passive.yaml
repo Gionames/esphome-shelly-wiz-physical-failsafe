@@ -1,0 +1,10 @@
+# BLE: scansione solo passiva e proxy senza connessioni.
+# Sovrascrive i valori del package automatous (esp32_ble_tracker active: true,
+# bluetooth_proxy active: true). id, continuous e l'interruttore "Bluetooth Proxy"
+# a runtime restano quelli del package.
+esp32_ble_tracker:
+  scan_parameters:
+    active: false
+
+bluetooth_proxy:
+  active: false
