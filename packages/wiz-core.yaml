@@ -1,4 +1,4 @@
-# wiz-core.yaml (v4.2.0) - modulo unico: comandi Wiz UDP, quorum, failsafe sul relè (su comando e proattivo),
+# wiz-core.yaml (v4.3.0) - modulo unico: comandi Wiz UDP, quorum, failsafe sul relè (su comando e proattivo),
 # luce nativa per HA, accensione, numeri di regolazione, entità di stato del failsafe.
 # OBBLIGATORIO. Richiede i moduli input e timer (per ora il codice li referenzia).
 
@@ -95,6 +95,29 @@ globals:
   - id: light_last         # ultimo stato della luce, sopravvive ai blackout
     type: bool
     restore_value: true
+    initial_value: "false"
+  - id: lst_bri            # ultimo colore noto a luce accesa: luminosità % (0 = nessuno), salvata per ripristinarla dopo un riavvio
+    type: int
+    restore_value: true
+    initial_value: "0"
+  - id: lst_kel            # temperatura colore in K (0 = la luce era in modalità colore)
+    type: int
+    restore_value: true
+    initial_value: "0"
+  - id: lst_r              # colore RGB (-1 = la luce era in modalità temperatura)
+    type: int
+    restore_value: true
+    initial_value: "-1"
+  - id: lst_g
+    type: int
+    restore_value: true
+    initial_value: "-1"
+  - id: lst_b
+    type: int
+    restore_value: true
+    initial_value: "-1"
+  - id: restore_pending    # il ripristino all'avvio non è ancora riuscito (le Wiz non rispondevano): fs_recover le rimette ai valori salvati
+    type: bool
     initial_value: "false"
   - id: fs_count           # quante volte è scattato il failsafe
     type: uint32_t
@@ -748,7 +771,23 @@ script:
           then:
             - script.execute:
                 id: wiz_cmd
-                kind: !lambda 'return id(fs_proactive) ? 0 : 1;'
+                kind: !lambda |-
+                  if (id(fs_proactive)) return 0;
+                  // il failsafe è scattato durante il ripristino all'avvio: le Wiz tornano ai valori di prima, non a quelli di accensione
+                  if (id(restore_pending) && id(lst_bri) > 0) {
+                    char *m = &id(custom_msg)[0];
+                    const size_t cap = 112;
+                    size_t l = snprintf(m, cap, "{\"method\":\"setPilot\",\"params\":{\"state\":true,\"dimming\":%d", id(lst_bri));
+                    if (id(lst_kel) >= 2200 && id(lst_kel) <= 6500) l += snprintf(m + l, cap - l, ",\"temp\":%d", id(lst_kel));
+                    else if (id(lst_r) >= 0 && id(lst_g) >= 0 && id(lst_b) >= 0) l += snprintf(m + l, cap - l, ",\"r\":%d,\"g\":%d,\"b\":%d", id(lst_r), id(lst_g), id(lst_b));
+                    snprintf(m + l, cap - l, "}}");
+                    id(custom_bri) = id(lst_bri);
+                    id(alt_cur) = false;
+                    id(alt_on) = false;
+                    id(alt_req) = false;
+                    return 3;
+                  }
+                  return 1;
                 retry_ms: ${wiz_retry_ms}
                 deadline_ms: !lambda 'return id(fs_proactive) ? ${polling_ms} : ${wiz_deadline_ms};'
             - wait_until:
@@ -765,10 +804,12 @@ script:
                         id(failsafe_mode) = false;
                         id(fs_proactive) = false;
                         id(poll_fail) = 0;
+                        id(restore_pending) = false;
                       }
   - id: sw_changed
     mode: restart
     then:
+      - lambda: 'id(restore_pending) = false;'
       - if:
           condition:
             lambda: 'return id(failsafe_mode) || !id(relay_1).state;'
@@ -1106,6 +1147,21 @@ interval:
               if ((((uint8_t) rv.get_color_mode()) & (uint8_t) light::ColorCapability::RGB) || fabsf(mired - rv.get_color_temperature()) > 3.0f) change = true;
             }
           }
+          // salvo (in flash) l'ultimo colore noto a luce accesa: serve a ripristinarlo dopo un riavvio
+          if (on && n > 0) {
+            const int s_bri = sd / n;
+            const int s_kel = (!use_rgb && nt > 0) ? sk / nt : 0;
+            const int s_r = use_rgb ? sr / nr : -1;
+            const int s_g = use_rgb ? sg / nr : -1;
+            const int s_b = use_rgb ? sb / nr : -1;
+            if (id(lst_bri) != s_bri || id(lst_kel) != s_kel || id(lst_r) != s_r || id(lst_g) != s_g || id(lst_b) != s_b) {
+              id(lst_bri) = s_bri;
+              id(lst_kel) = s_kel;
+              id(lst_r) = s_r;
+              id(lst_g) = s_g;
+              id(lst_b) = s_b;
+            }
+          }
           if (!change) return;
           id(wl_sync) = true;
           auto call = lt->make_call();
@@ -1118,22 +1174,40 @@ interval:
           }
           call.perform();
           id(wl_sync) = false;
-  # stato della luce dopo un'interruzione di corrente: solo accensione/brownout, non dopo un riavvio software o OTA.
+  # stato della luce dopo un riavvio (blackout, OTA, watchdog, reset software): lo stesso comportamento in tutti i casi.
   # Aspetta 15 s perché le Wiz tornino in rete.
   - interval: 1s
     then:
       - lambda: |-
           if (id(pon_done) || !id(boot_done) || millis() < 15000 || id(wiz_busy)) return;
           id(pon_done) = true;
-          const bool before = id(light_last);            // stato prima dello spegnimento
+          const bool before = id(light_last);   // stato prima del riavvio
           id(light_last) = id(light_on_sensor).state;
-          const auto rr = esp_reset_reason();
-          if (rr != ESP_RST_POWERON && rr != ESP_RST_BROWNOUT) return;
           // 0 Spenta, 1 Accesa, 2 Ultimo stato, 3 Segui interruttore
           const int m = id(power_on_select).active_index().value_or(2);
           const bool want = m == 0 ? false : m == 1 ? true : m == 2 ? before : id(sw_last) == 1;
-          ESP_LOGI("boot", "accensione dopo interruzione: luce %s", want ? "accesa" : "spenta");
-          // luce da accendere: la comando sempre (anche se le Wiz sono già accese) così ripartono con luminosità e colore di accensione
+          ESP_LOGI("boot", "stato dopo riavvio (motivo %d): luce %s", (int) esp_reset_reason(), want ? "accesa" : "spenta");
           if (!want && !id(light_on_sensor).state) return;
+          // "Ultimo stato": riparte con la luminosità e il colore di prima (lst_*), non con quelli di accensione
+          if (want && m == 2 && id(lst_bri) > 0) {
+            // già tutte accese con gli stessi valori (per esempio dopo un OTA che non le ha riavviate): non rimando niente
+            bool same = id(wiz_n) > 0;
+            for (int i = 0; i < id(wiz_n) && same; i++) {
+              if (!id(wiz_known)[i] || !id(wiz_lit)[i] || abs(id(wiz_dim)[i] - id(lst_bri)) > 2) same = false;
+              else if (id(lst_kel) > 0) { if (abs(id(wiz_kel)[i] - id(lst_kel)) > 100) same = false; }
+              else if (id(lst_r) >= 0) {
+                if (id(wiz_cr)[i] < 0 || abs(id(wiz_cr)[i] - id(lst_r)) > 8 || abs(id(wiz_cg)[i] - id(lst_g)) > 8 || abs(id(wiz_cb)[i] - id(lst_b)) > 8) same = false;
+              }
+            }
+            if (same) {
+              ESP_LOGI("boot", "le Wiz sono già come prima: nessun comando");
+              return;
+            }
+            ESP_LOGI("boot", "ripristino luminosità %d%% e colore di prima", id(lst_bri));
+            id(wl_cmd_t) = millis();
+            id(wiz_request).execute(true, id(lst_bri), id(lst_kel), id(lst_r), id(lst_g), id(lst_b));
+            id(restore_pending) = true;   // dopo wiz_request: sw_changed la azzera all'inizio
+            return;
+          }
           id(sw_action) = want ? 1 : 2;
           id(sw_changed).execute();
