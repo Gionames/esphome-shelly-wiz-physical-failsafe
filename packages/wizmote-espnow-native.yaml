@@ -43,3 +43,15 @@ espnow:
         // una riga di log per pressione (dopo la deduplica)
         ESP_LOGI("wizmote", "mac=%s btn=%d seq=%u", mac, (int) data[6], (unsigned) seq);
         id(wizmote_event).execute(std::string(mac), (int) data[6], std::to_string(seq));
+
+substitutions:
+  ver_wizmote_espnow: "1.0.0"   # versione del package (stampata nel log all'avvio)
+
+esphome:
+  on_boot:
+    - priority: 900
+      then:
+        - logger.log:
+            format: "pacchetto wizmote-espnow-native v${ver_wizmote_espnow}"
+            level: INFO
+            tag: pacchetti
