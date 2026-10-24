@@ -33,6 +33,7 @@ esphome:
   on_boot:
     - priority: 900
       then:
+        - delay: 9s   # dopo il collegamento del log di rete, altrimenti la riga si perde
         - logger.log:
             format: "pacchetto wifi-settings v${ver_wifi_settings}"
             level: INFO
