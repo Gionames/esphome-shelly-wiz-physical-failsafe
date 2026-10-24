@@ -6,9 +6,7 @@ substitutions:
   ver_wiz_core: "4.3.4"            # versione del package (stampata nel log all'avvio)
   wiz_input_id: "switch_input"
   wiz_group_name: "Luce"
-  # --- failsafe Wiz ---
-  wiz_need: "std::max(1, std::min((int) id(wiz_quorum_num).state, id(wiz_n)))"   # lampade che devono rispondere (entità "Quorum Wiz", regolabile da HA/pagina web), mai più di quelle configurate
-  wiz_retry_ms: "400"            # ogni quanto rimanda il comando alle lampade che non hanno ancora risposto
+wiz-core v4.3.5: rimosso il sensore IP Address  wiz_retry_ms: "400"            # ogni quanto rimanda il comando alle lampade che non hanno ancora risposto
   wiz_deadline_ms: "((int) id(wiz_confirm_num).state)"   # tempo massimo per un comando di accensione/spegnimento: entità "Tempo conferma Wiz" (HA/pagina web)
   wiz_confirm_ms: "((int) id(wiz_confirm_num).state * 4 / 7)"   # tempo massimo per getPilot (conferma e lettura periodica): 4/7 di "Tempo conferma Wiz" (800 ms a 1400)
   powercycle_ms: "0"             # relè aperto per tanto se nessuna Wiz risponde ma è alimentata (0 = disattivato)
