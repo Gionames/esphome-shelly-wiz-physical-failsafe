@@ -12,14 +12,14 @@ binary_sensor:
 
 text_sensor:
   - platform: template
-    name: "Versione timer"
+    name: "Versione - timer"
     id: ver_timer_ts
     icon: mdi:tag-outline
     entity_category: diagnostic
     update_interval: never
     web_server:
-      sorting_group_id: grp_diag
-      sorting_weight: 900
+      sorting_group_id: grp_ver
+      sorting_weight: 30
   - platform: template
     name: "Timer: scade alle"
     id: tmr_end_text
