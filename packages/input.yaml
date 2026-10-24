@@ -97,6 +97,15 @@ binary_sensor:
 
 text_sensor:
   - platform: template
+    name: "Versione input"
+    id: ver_input_ts
+    icon: mdi:tag-outline
+    entity_category: diagnostic
+    update_interval: never
+    web_server:
+      sorting_group_id: grp_diag
+      sorting_weight: 900
+  - platform: template
     name: "Wiz - guida comando pulsante"
     icon: mdi:information-outline
     entity_category: diagnostic
@@ -192,6 +201,9 @@ esphome:
   on_boot:
     - priority: 900
       then:
+        - text_sensor.template.publish:
+            id: ver_input_ts
+            state: "${ver_input}"
         - delay: 9s   # dopo il collegamento del log di rete, altrimenti la riga si perde
         - logger.log:
             format: "pacchetto input v${ver_input}"
