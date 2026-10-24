@@ -1,4 +1,4 @@
-# wiz-core.yaml (v4.3.1) - modulo unico: comandi Wiz UDP, quorum, failsafe sul relè (su comando e proattivo),
+# wiz-core.yaml (v4.3.2) - modulo unico: comandi Wiz UDP, quorum, failsafe sul relè (su comando e proattivo),
 # luce nativa per HA, accensione, numeri di regolazione, entità di stato del failsafe.
 # OBBLIGATORIO. Richiede i moduli input e timer (per ora il codice li referenzia).
 
@@ -1186,7 +1186,7 @@ interval:
           // 0 Spenta, 1 Accesa, 2 Ultimo stato, 3 Segui interruttore
           const int m = id(power_on_select).active_index().value_or(2);
           const bool want = m == 0 ? false : m == 1 ? true : m == 2 ? before : id(sw_last) == 1;
-          ESP_LOGI("boot", "stato dopo riavvio (motivo %d): luce %s", (int) esp_reset_reason(), want ? "accesa" : "spenta");
+          ESP_LOGI("boot", "wiz-core v4.3.2 - stato dopo riavvio (motivo %d): luce %s", (int) esp_reset_reason(), want ? "accesa" : "spenta");
           if (!want && !id(light_on_sensor).state) return;
           // "Ultimo stato": riparte con la luminosità e il colore di prima (lst_*), non con quelli di accensione
           if (want && m == 2 && id(lst_bri) > 0) {
