@@ -1,4 +1,4 @@
-# input.yaml (v4.0.0) - ingresso fisico: modalità interruttore/pulsante, pressione lunga, blocco/inversione.
+# input.yaml (v4.0.1) - ingresso fisico: modalità interruttore/pulsante, pressione lunga, blocco/inversione.
 # Obiettivo: usabile anche con luci non Wiz. ATTENZIONE: per ora chiama ancora sw_changed e variabili del core (wiz-core.yaml); il disaccoppiamento è da fare.
 # Richiede wiz-core.
 
@@ -184,3 +184,15 @@ script:
           } else if (lp == 2) {
             id(input_event).trigger("pressione_lunga");
           }
+
+substitutions:
+  ver_input: "4.0.1"   # versione del package (stampata nel log all'avvio)
+
+esphome:
+  on_boot:
+    - priority: 900
+      then:
+        - logger.log:
+            format: "pacchetto input v${ver_input}"
+            level: INFO
+            tag: pacchetti
