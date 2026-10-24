@@ -40,14 +40,14 @@ number:
 
 text_sensor:
   - platform: template
-    name: "Versione coil-pwm"
+    name: "Versione - coil-pwm"
     id: ver_coil_pwm_ts
     icon: mdi:tag-outline
     entity_category: diagnostic
     update_interval: never
     web_server:
-      sorting_group_id: grp_diag
-      sorting_weight: 900
+      sorting_group_id: grp_ver
+      sorting_weight: 40
   - platform: template
     name: "Bobina relè: cosa fa"
     icon: mdi:information-outline
