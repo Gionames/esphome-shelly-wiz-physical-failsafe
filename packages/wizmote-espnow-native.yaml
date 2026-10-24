@@ -62,8 +62,11 @@ esphome:
 
 text_sensor:
   - platform: template
-    name: "Versione wizmote-espnow"
+    name: "Versione - wizmote-espnow"
     id: ver_wizmote_espnow_ts
     icon: mdi:tag-outline
     entity_category: diagnostic
     update_interval: never
+    web_server:
+      sorting_group_id: grp_ver
+      sorting_weight: 60
