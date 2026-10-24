@@ -6,6 +6,7 @@
 #   coil_pins    GPIO numbers driving those coils, same order, e.g. "10" or "5, 3"
 # Optional: coil_first_channel (first LEDC channel, default 4; timer 3 is used)
 substitutions:
+  ver_coil_pwm: "1.0.0"   # versione del package (stampata nel log all'avvio); componente esterno: vedi tag in external_components
   coil_first_channel: "4"
 
 external_components:
@@ -74,3 +75,12 @@ text_sensor:
     web_server:
       sorting_group_id: grp_diag
       sorting_weight: 5
+
+esphome:
+  on_boot:
+    - priority: 900
+      then:
+        - logger.log:
+            format: "pacchetto coil-pwm v${ver_coil_pwm} (componente v2.0.0)"
+            level: INFO
+            tag: pacchetti
