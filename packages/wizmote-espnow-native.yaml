@@ -51,6 +51,7 @@ esphome:
   on_boot:
     - priority: 900
       then:
+        - delay: 9s   # dopo il collegamento del log di rete, altrimenti la riga si perde
         - logger.log:
             format: "pacchetto wizmote-espnow-native v${ver_wizmote_espnow}"
             level: INFO
