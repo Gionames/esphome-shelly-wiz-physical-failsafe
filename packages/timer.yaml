@@ -119,6 +119,7 @@ esphome:
   on_boot:
     - priority: 900
       then:
+        - delay: 9s   # dopo il collegamento del log di rete, altrimenti la riga si perde
         - logger.log:
             format: "pacchetto timer v${ver_timer}"
             level: INFO
