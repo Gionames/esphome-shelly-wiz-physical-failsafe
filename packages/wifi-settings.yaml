@@ -1,4 +1,4 @@
-# wifi-settings.yaml  (v1.3.0)
+# wifi-settings.yaml  (v1.4.0)
 # Impostazioni Wi-Fi modificabili da Home Assistant (device info) e dalla pagina web, con due reti (come ShellyOS).
 # Funziona su qualunque ESPHome che abbia gia' il blocco "wifi:" (con le sue reti in YAML come punto di partenza).
 #
@@ -10,7 +10,9 @@
 # Regole:
 #   - campi vuoti = nessun cambiamento: il dispositivo usa la rete scritta nello YAML.
 #   - all'avvio, se la rete 1 e' impostata e diversa da quella attuale, viene applicata (e salvata).
-#   - se la rete resta assente per "wifi_lost_timeout" (default 30 s) e entrambe le reti sono impostate, passa all'altra.
+#   - se manca il Wi-Fi e le due reti sono impostate, ogni 10 s (wifi_rotate_s) prova l'altra rete, e cosi' via a giro.
+#   - se il Wi-Fi manca per piu' di "Wi-Fi - riavvia radio dopo" (default 60 s) spegne e riaccende la sola radio Wi-Fi
+#     (nessun riavvio del dispositivo: relè e luci non vengono toccati) e riparte dalla rete 1.
 #   - i valori sono ricordati dopo riavvii e aggiornamenti OTA (restore_value).
 # ATTENZIONE: le password sono entita' di testo: Home Assistant ne conserva il valore nel suo storico
 # e la pagina web del dispositivo e' senza autenticazione. Usare solo su rete locale fidata.
@@ -22,7 +24,8 @@ substitutions:
   wifi2_ssid: ""
   wifi2_pass: ""
   wifi_apply_timeout: "30s"     # attesa massima per collegarsi a una rete durante un tentativo
-  wifi_lost_timeout: "30"       # valore iniziale (modificabile da HA/pagina web): secondi senza Wi-Fi prima di passare all'altra rete
+  wifi_rotate_s: "10"           # secondi senza Wi-Fi prima di provare l'altra rete (e poi a giro, ogni tanti secondi)
+  wifi_cycle_timeout: "60"      # valore iniziale (modificabile da HA/pagina web): secondi senza Wi-Fi prima di spegnere e riaccendere la radio
   wifi_pass_mode: "text"        # "text" = password visibili; "password" = nascoste
 
 esphome:
@@ -68,6 +71,9 @@ globals:
   - id: wifi_down_s      # secondi consecutivi senza Wi-Fi
     type: int
     initial_value: "0"
+  - id: wifi_cycling     # true mentre la radio Wi-Fi e' spenta di proposito
+    type: bool
+    initial_value: "false"
 
 text:
   - platform: template
@@ -143,18 +149,18 @@ text_sensor:
 
 number:
   - platform: template
-    name: "Wi-Fi - tempo di disconnessione max"
-    id: wifi_lost_s
+    name: "Wi-Fi - riavvia radio dopo"
+    id: wifi_cycle_s
     icon: mdi:timer-sand
     entity_category: config
     unit_of_measurement: "s"
     mode: box
-    min_value: 10
+    min_value: 20
     max_value: 600
     step: 5
     optimistic: true
     restore_value: true
-    initial_value: ${wifi_lost_timeout}
+    initial_value: ${wifi_cycle_timeout}
     web_server:
       sorting_group_id: grp_wifi
       sorting_weight: 45
@@ -258,22 +264,58 @@ script:
                             id(wifi_status_ts).publish_state(m);
                         - script.execute: wifi_next
 
-interval:
-  # se il Wi-Fi manca da troppo e le due reti sono impostate, passa all'altra (senza salvarla)
-  - interval: 5s
+  # prova l'altra rete ogni wifi_rotate_s secondi senza Wi-Fi; oltre "riavvia radio dopo" spegne e riaccende il Wi-Fi
+  - id: wifi_hop
+    mode: restart
+    parameters:
+      target: int       # 1 o 2 = rete da provare; 0 = stessa rete (solo spegni/riaccendi)
     then:
       - lambda: |-
-          if (wifi::global_wifi_component->is_connected()) id(wifi_down_s) = 0;
-          else id(wifi_down_s) += 5;
-      - if:
-          condition:
-            lambda: |-
-              return id(wifi_down_s) >= (int) id(wifi_lost_s).state
-                  && !id(wifi1_ssid).state.empty() && !id(wifi2_ssid).state.empty()
-                  && !(id(wifi_busy) && (millis() - id(wifi_busy_since) < 120000));
-          then:
-            - lambda: 'id(wifi_down_s) = 0;'
-            - script.execute:
-                id: wifi_start
-                first: !lambda 'return id(wifi_slot) == 1 ? 2 : 1;'
-                save: false
+          auto *w = wifi::global_wifi_component;
+          if (target > 0) {
+            wifi::WiFiAP ap;
+            ap.set_ssid(target == 1 ? id(wifi1_ssid).state : id(wifi2_ssid).state);
+            ap.set_password(target == 1 ? id(wifi1_pass).state : id(wifi2_pass).state);
+            w->disable();
+            w->set_sta(ap);
+            w->enable();
+            id(wifi_slot) = target;
+            ESP_LOGW("wifi", "provo la rete %d", target);
+          } else {
+            w->disable();
+            w->enable();
+          }
+
+  - id: wifi_cycle
+    mode: single
+    then:
+      - lambda: |-
+          id(wifi_cycling) = true;
+          ESP_LOGW("wifi", "senza Wi-Fi da %d s: spengo e riaccendo la radio Wi-Fi", id(wifi_down_s));
+          id(wifi_down_s) = 0;
+          wifi::global_wifi_component->disable();
+      - delay: 3s
+      - lambda: 'id(wifi_hop).execute(id(wifi1_ssid).state.empty() ? 0 : 1);'
+      - lambda: 'id(wifi_cycling) = false;'
+
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          auto *w = wifi::global_wifi_component;
+          if (id(wifi_cycling)) return;
+          if (w->is_connected()) {
+            id(wifi_down_s) = 0;
+            const std::string &cur = id(wifi_cur_ssid).state;
+            if (!cur.empty()) id(wifi_slot) = (cur == id(wifi1_ssid).state) ? 1 : (cur == id(wifi2_ssid).state) ? 2 : 0;
+            return;
+          }
+          if (w->is_disabled()) return;
+          id(wifi_down_s)++;
+          if (id(wifi_busy) && (millis() - id(wifi_busy_since) < 120000)) return;   // c'e' gia' un'applicazione in corso
+          const int d = id(wifi_down_s);
+          if (d >= (int) id(wifi_cycle_s).state) {
+            id(wifi_cycle).execute();
+          } else if (d % ${wifi_rotate_s} == 0 && !id(wifi1_ssid).state.empty() && !id(wifi2_ssid).state.empty()) {
+            id(wifi_hop).execute(id(wifi_slot) == 1 ? 2 : 1);
+          }
