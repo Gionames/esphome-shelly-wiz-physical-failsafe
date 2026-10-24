@@ -1,4 +1,4 @@
-# wifi-settings.yaml  (v1.4.0)
+# wifi-settings.yaml  (v1.4.1)
 # Impostazioni Wi-Fi modificabili da Home Assistant (device info) e dalla pagina web, con due reti (come ShellyOS).
 # Funziona su qualunque ESPHome che abbia gia' il blocco "wifi:" (con le sue reti in YAML come punto di partenza).
 #
@@ -17,6 +17,7 @@
 # ATTENZIONE: le password sono entita' di testo: Home Assistant ne conserva il valore nel suo storico
 # e la pagina web del dispositivo e' senza autenticazione. Usare solo su rete locale fidata.
 substitutions:
+  ver_wifi_settings: "1.4.1"   # versione del package (stampata nel log all'avvio)
   # valori iniziali dei campi (usati solo al primo avvio, finche' non li cambi da HA o dalla pagina web).
   # NON scrivere password in chiaro nel repo: nel YAML del device usa !secret.
   wifi1_ssid: ""
@@ -30,18 +31,24 @@ substitutions:
 
 esphome:
   on_boot:
-    priority: -100
-    then:
-      - delay: 20s
-      - lambda: 'id(wifi_busy) = false;'
-      - if:
-          condition:
-            lambda: 'return !id(wifi1_ssid).state.empty();'
-          then:
-            - script.execute:
-                id: wifi_start
-                first: 1
-                save: true
+    - priority: 900
+      then:
+        - logger.log:
+            format: "pacchetto wifi-settings v${ver_wifi_settings}"
+            level: INFO
+            tag: pacchetti
+    - priority: -100
+      then:
+        - delay: 20s
+        - lambda: 'id(wifi_busy) = false;'
+        - if:
+            condition:
+              lambda: 'return !id(wifi1_ssid).state.empty();'
+            then:
+              - script.execute:
+                  id: wifi_start
+                  first: 1
+                  save: true
 
 globals:
   - id: wifi_first       # prima rete da provare (1 o 2)
