@@ -189,6 +189,9 @@ esp32:
 web_server:
   version: 3
   sorting_groups:
+    - id: grp_ver          # solo le versioni dei package caricati
+      name: "Versioni"
+      sorting_weight: 95
     - id: grp_luce
       name: "${wiz_group_name}"
       sorting_weight: 10
@@ -299,14 +302,14 @@ sensor:
 
 text_sensor:
   - platform: template
-    name: "Versione wiz-core"
+    name: "Versione - wiz-core"
     id: ver_wiz_core_ts
     icon: mdi:tag-outline
     entity_category: diagnostic
     update_interval: never
     web_server:
-      sorting_group_id: grp_diag
-      sorting_weight: 900
+      sorting_group_id: grp_ver
+      sorting_weight: 10
   - platform: template
     name: "Failsafe on/off - Nota"
     id: failsafe_note
