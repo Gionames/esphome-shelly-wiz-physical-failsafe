@@ -16,8 +16,19 @@ esphome:
   on_boot:
     - priority: 900
       then:
+        - text_sensor.template.publish:
+            id: ver_ble_passive_ts
+            state: "${ver_ble_passive}"
         - delay: 9s   # dopo il collegamento del log di rete, altrimenti la riga si perde
         - logger.log:
             format: "pacchetto ble-passive v${ver_ble_passive}"
             level: INFO
             tag: pacchetti
+
+text_sensor:
+  - platform: template
+    name: "Versione ble-passive"
+    id: ver_ble_passive_ts
+    icon: mdi:tag-outline
+    entity_category: diagnostic
+    update_interval: never
