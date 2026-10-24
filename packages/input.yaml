@@ -97,14 +97,14 @@ binary_sensor:
 
 text_sensor:
   - platform: template
-    name: "Versione input"
+    name: "Versione - input"
     id: ver_input_ts
     icon: mdi:tag-outline
     entity_category: diagnostic
     update_interval: never
     web_server:
-      sorting_group_id: grp_diag
-      sorting_weight: 900
+      sorting_group_id: grp_ver
+      sorting_weight: 20
   - platform: template
     name: "Wiz - guida comando pulsante"
     icon: mdi:information-outline
