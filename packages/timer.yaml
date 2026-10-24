@@ -1,4 +1,4 @@
-# timer.yaml (v4.0.0) - auto-off / auto-on con ritardo.
+# timer.yaml (v4.0.1) - auto-off / auto-on con ritardo.
 # Obiettivo: usabile anche con luci non Wiz. ATTENZIONE: per ora dipende ancora da sw_changed e dal core (wiz-core.yaml).
 
 binary_sensor:
@@ -111,3 +111,15 @@ interval:
           ESP_LOGI("timer", "%s scaduto", k == 1 ? "auto-off" : "auto-on");
           id(sw_action) = k == 1 ? 2 : 1;
           id(sw_changed).execute();
+
+substitutions:
+  ver_timer: "4.0.1"   # versione del package (stampata nel log all'avvio)
+
+esphome:
+  on_boot:
+    - priority: 900
+      then:
+        - logger.log:
+            format: "pacchetto timer v${ver_timer}"
+            level: INFO
+            tag: pacchetti
