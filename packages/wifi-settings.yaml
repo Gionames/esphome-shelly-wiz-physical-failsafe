@@ -204,9 +204,6 @@ button:
 web_server:
   version: 3
   sorting_groups:
-    - id: grp_ver          # solo le versioni dei package caricati
-      name: "Versioni"
-      sorting_weight: 95
     - id: grp_wifi
       name: "Wi-Fi"
       sorting_weight: 90
