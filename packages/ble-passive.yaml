@@ -8,3 +8,15 @@ esp32_ble_tracker:
 
 bluetooth_proxy:
   active: false
+
+substitutions:
+  ver_ble_passive: "1.0.0"   # versione del package (stampata nel log all'avvio)
+
+esphome:
+  on_boot:
+    - priority: 900
+      then:
+        - logger.log:
+            format: "pacchetto ble-passive v${ver_ble_passive}"
+            level: INFO
+            tag: pacchetti
