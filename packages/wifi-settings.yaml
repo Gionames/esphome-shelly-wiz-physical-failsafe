@@ -146,14 +146,14 @@ text:
 
 text_sensor:
   - platform: template
-    name: "Versione wifi-settings"
+    name: "Versione - wifi-settings"
     id: ver_wifi_settings_ts
     icon: mdi:tag-outline
     entity_category: diagnostic
     update_interval: never
     web_server:
-      sorting_group_id: grp_wifi
-      sorting_weight: 70
+      sorting_group_id: grp_ver
+      sorting_weight: 50
   - platform: wifi_info
     ssid:
       id: wifi_cur_ssid
@@ -204,6 +204,9 @@ button:
 web_server:
   version: 3
   sorting_groups:
+    - id: grp_ver          # solo le versioni dei package caricati
+      name: "Versioni"
+      sorting_weight: 95
     - id: grp_wifi
       name: "Wi-Fi"
       sorting_weight: 90
