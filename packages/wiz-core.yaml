@@ -1,9 +1,9 @@
-# wiz-core.yaml (v4.3.3) - modulo unico: comandi Wiz UDP, quorum, failsafe sul relè (su comando e proattivo),
+# wiz-core.yaml (v4.3.4) - modulo unico: comandi Wiz UDP, quorum, failsafe sul relè (su comando e proattivo),
 # luce nativa per HA, accensione, numeri di regolazione, entità di stato del failsafe.
 # OBBLIGATORIO. Richiede i moduli input e timer (per ora il codice li referenzia).
 
 substitutions:
-  ver_wiz_core: "4.3.3"            # versione del package (stampata nel log all'avvio)
+  ver_wiz_core: "4.3.4"            # versione del package (stampata nel log all'avvio)
   wiz_input_id: "switch_input"
   wiz_group_name: "Luce"
   # --- failsafe Wiz ---
@@ -189,9 +189,6 @@ esp32:
 web_server:
   version: 3
   sorting_groups:
-    - id: grp_ver          # solo le versioni dei package caricati
-      name: "Versioni"
-      sorting_weight: 95
     - id: grp_luce
       name: "${wiz_group_name}"
       sorting_weight: 10
@@ -301,6 +298,11 @@ sensor:
       sorting_weight: 73
 
 text_sensor:
+  - platform: wifi_info    # indirizzo IP attuale (device info e pagina web)
+    ip_address:
+      name: "IP Address"
+      icon: mdi:ip-network
+      entity_category: diagnostic
   - platform: template
     name: "Versione - wiz-core"
     id: ver_wiz_core_ts
