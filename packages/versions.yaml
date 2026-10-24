@@ -1,0 +1,14 @@
+# versions.yaml (v1.0.0) - sezione "Versioni" della pagina web: definisce il gruppo che raccoglie i sensori "Versione - <package>".
+# Va incluso (stesso blocco identico) in OGNI YAML che usa i package del repo; i package non lo includono da soli
+# perche' un gruppo web puo' essere definito una volta sola.
+#   packages:
+#     versions:
+#       url: https://github.com/Gionames/esphome-shelly-wiz-physical-failsafe
+#       ref: modularizzazione
+#       refresh: 1min
+#       files: [packages/versions.yaml]
+web_server:
+  sorting_groups:
+    - id: grp_ver
+      name: "Versioni"
+      sorting_weight: 95
