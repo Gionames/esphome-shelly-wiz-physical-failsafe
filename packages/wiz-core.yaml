@@ -1,4 +1,4 @@
-# wiz-core.yaml (v4.3.0) - modulo unico: comandi Wiz UDP, quorum, failsafe sul relè (su comando e proattivo),
+# wiz-core.yaml (v4.3.1) - modulo unico: comandi Wiz UDP, quorum, failsafe sul relè (su comando e proattivo),
 # luce nativa per HA, accensione, numeri di regolazione, entità di stato del failsafe.
 # OBBLIGATORIO. Richiede i moduli input e timer (per ora il codice li referenzia).
 
@@ -1208,6 +1208,15 @@ interval:
             id(wiz_request).execute(true, id(lst_bri), id(lst_kel), id(lst_r), id(lst_g), id(lst_b));
             id(restore_pending) = true;   // dopo wiz_request: sw_changed la azzera all'inizio
             return;
+          }
+          // nessun colore salvato (primo avvio dopo l'aggiornamento): se le Wiz sono già accese le lascio come stanno, senza forzare 100%/2700K
+          if (want && m == 2) {
+            bool lit = false;
+            for (int i = 0; i < id(wiz_n); i++) if (id(wiz_known)[i] && id(wiz_lit)[i]) lit = true;
+            if (lit) {
+              ESP_LOGI("boot", "nessun colore salvato, ma le Wiz sono già accese: nessun comando");
+              return;
+            }
           }
           id(sw_action) = want ? 1 : 2;
           id(sw_changed).execute();
