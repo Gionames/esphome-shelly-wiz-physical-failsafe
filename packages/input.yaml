@@ -1,4 +1,4 @@
-# input.yaml (v4.0.1) - ingresso fisico: modalità interruttore/pulsante, pressione lunga, blocco/inversione.
+# input.yaml (v4.1.2) - ingresso fisico: modalità interruttore/pulsante, pressione lunga, blocco/inversione.
 # Obiettivo: usabile anche con luci non Wiz. ATTENZIONE: per ora chiama ancora sw_changed e variabili del core (wiz-core.yaml); il disaccoppiamento è da fare.
 # Richiede wiz-core.
 
@@ -44,6 +44,7 @@ select:
       - "Nessuna azione"
       - "Imposta luminosità e colore alternativi alle Wiz"
       - "Manda l'evento a Home Assistant"
+      - "Dimmer: tenendo premuto la luminosità sale o scende"
     initial_option: "Imposta luminosità e colore alternativi alle Wiz"
     restore_value: true
 
@@ -67,7 +68,7 @@ binary_sensor:
             const int m = id(input_mode_select).active_index().value_or(0);
             const bool push = (m == 1 || m == 3);                         // modalità a pulsante
             const bool on_rel = push && id(cmd_timing_select).active_index().value_or(0) == 1;
-            const int lp = id(longpress_select).active_index().value_or(0);   // 0 nessuna, 1 valori alternativi, 2 evento HA
+            const int lp = id(longpress_select).active_index().value_or(0);   // 0 nessuna, 1 valori alternativi, 2 evento HA, 3 dimmer
             int act = -1;                       // 0 commuta, 1 accendi, 2 spegni
             if (m == 0) act = 0;
             else if (m == 1) { if (x) act = 0; }
@@ -163,6 +164,51 @@ number:
     initial_value: 1
     web_server:
       sorting_group_id: grp_ingresso
+  - platform: template
+    name: "Wiz - dimmer: durata rampa"
+    id: dim_ramp_s
+    icon: mdi:timer-sand
+    entity_category: config
+    unit_of_measurement: "s"
+    min_value: 1
+    max_value: 10
+    step: 0.5
+    mode: box
+    optimistic: true
+    restore_value: true
+    initial_value: 4
+    web_server:
+      sorting_group_id: grp_ingresso
+  - platform: template
+    name: "Wiz - dimmer: temperatura al minimo"
+    id: dim_kmin
+    icon: mdi:thermometer-low
+    entity_category: config
+    unit_of_measurement: "K"
+    min_value: 2200
+    max_value: 6500
+    step: 100
+    mode: box
+    optimistic: true
+    restore_value: true
+    initial_value: 2200
+    web_server:
+      sorting_group_id: grp_ingresso
+  - platform: template
+    name: "Wiz - dimmer: intervallo passo"
+    id: dim_step
+    icon: mdi:timer-cog-outline
+    entity_category: config
+    unit_of_measurement: "ms"
+    min_value: 100
+    max_value: 1000
+    step: 50
+    mode: box
+    optimistic: true
+    restore_value: true
+    initial_value: 250
+    web_server:
+      sorting_group_id: grp_ingresso
 
 event:
   - platform: template
@@ -173,6 +219,27 @@ event:
       - pressione_lunga
     web_server:
       sorting_group_id: grp_ingresso
+
+globals:
+  # dimmer continuo (pressione lunga, opzione "Dimmer")
+  - id: dim_x          # posizione sulla curva, 0 (minimo) - 1 (massimo)
+    type: float
+    initial_value: "0"
+  - id: dim_up         # direzione della rampa: true sale
+    type: bool
+    initial_value: "true"
+  - id: dim_end        # raggiunto un estremo o failsafe: la rampa è finita
+    type: bool
+    initial_value: "false"
+  - id: dim_first      # primo passo partendo da luce spenta
+    type: bool
+    initial_value: "false"
+  - id: dim_pct        # luminosità % del passo corrente
+    type: int
+    initial_value: "10"
+  - id: dim_k          # temperatura (K) del passo corrente, 0 = invariata
+    type: int
+    initial_value: "0"
 
 script:
   # pressione lunga (solo modalità a pulsante): scatta alla soglia, senza aspettare il rilascio
@@ -192,10 +259,63 @@ script:
             id(sw_changed).execute();
           } else if (lp == 2) {
             id(input_event).trigger("pressione_lunga");
+          } else if (lp == 3) {
+            // dimmer continuo: punto di partenza e direzione; la rampa è nell'azione while qui sotto.
+            // Direzione: a ogni pressione lunga si inverte; al massimo si scende, al minimo si sale; da spenta accende al minimo e sale.
+            id(dim_end) = false;
+            id(dim_first) = false;
+            if (id(failsafe_mode)) { id(dim_end) = true; } else {
+              const bool on = id(light_on_sensor).state;
+              if (!on) {
+                id(dim_x) = 0.0f; id(dim_up) = true; id(dim_first) = true;
+              } else {
+                int pct = id(lst_bri);
+                if (pct <= 0) pct = 100;
+                id(dim_x) = std::sqrt(std::max(0.0f, std::min(1.0f, (pct - 10) / 90.0f)));
+                if (pct >= 100) id(dim_up) = false;
+                else if (pct <= 10) id(dim_up) = true;
+                else id(dim_up) = !id(dim_up);
+              }
+            }
           }
+      # dimmer continuo: finché il tasto resta premuto, un passo ogni "intervallo passo" ms (runtime); il rilascio ferma lo script.
+      # Ogni passo è un comando di luminosità (wiz_request): il nuovo comando annulla quello in corso, come per le altre azioni.
+      # Curva percettiva: luminosità % = 10 + 90 * x^2, con x da 0 a 1; agli estremi la rampa si ferma senza altro segnale.
+      - if:
+          condition:
+            lambda: 'return id(longpress_select).active_index().value_or(0) == 3 && id(sw_last) == 1 && !id(dim_end);'
+          then:
+            - while:
+                condition:
+                  lambda: 'return id(sw_last) == 1 && !id(failsafe_mode) && !id(dim_end);'
+                then:
+                  - lambda: |-
+                      const float rs = std::max(0.5f, id(dim_ramp_s).state);
+                      const float step = id(dim_step).state / 1000.0f / rs;
+                      float x = id(dim_x) + (id(dim_up) ? step : -step);
+                      if (x >= 1.0f) { x = 1.0f; id(dim_end) = true; }
+                      if (x <= 0.0f) { x = 0.0f; id(dim_end) = true; }
+                      id(dim_x) = x;
+                      id(dim_pct) = (int) std::lround(10.0f + 90.0f * x * x);
+                      // dim to warm: la temperatura scende con la luminosità, da quella di accensione (x = 1) a "temperatura al minimo" (x = 0).
+                      // Se la temperatura al minimo non è più bassa di quella di accensione, il colore non viene toccato (solo al primo passo da spenta).
+                      const float kh = id(wiz_on_kelvin).state;
+                      const float kl = std::min(id(dim_kmin).state, kh);
+                      if (kl < kh) id(dim_k) = (int) std::lround(kl + (kh - kl) * x);
+                      else id(dim_k) = id(dim_first) ? (int) kh : 0;
+                      id(dim_first) = false;
+                  - script.execute:
+                      id: wiz_request
+                      power: true
+                      bri: !lambda 'return id(dim_pct);'
+                      kelvin: !lambda 'return id(dim_k);'
+                      r: -1
+                      g: -1
+                      b: -1
+                  - delay: !lambda 'return (uint32_t) id(dim_step).state;'
 
 substitutions:
-  ver_input: "4.0.1"   # versione del package (stampata nel log all'avvio)
+  ver_input: "4.1.2"   # versione del package (stampata nel log all'avvio)
 
 esphome:
   on_boot:
