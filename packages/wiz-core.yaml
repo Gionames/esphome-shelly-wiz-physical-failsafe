@@ -3,9 +3,17 @@
 # OBBLIGATORIO. Richiede i moduli input e timer (per ora il codice li referenzia).
 
 substitutions:
-  ver_wiz_core: "4.3.5"            # versione del package (stampata nel log all'avvio)
+  ver_wiz_core: "4.4.2"            # versione del package (stampata nel log all'avvio)
   wiz_input_id: "switch_input"
   wiz_group_name: "Luce"
+  wiz_label_1: "Wiz 1"      # nome mostrato in HA per la lampada in posizione 1 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
+  wiz_label_2: "Wiz 2"      # nome mostrato in HA per la lampada in posizione 2 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
+  wiz_label_3: "Wiz 3"      # nome mostrato in HA per la lampada in posizione 3 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
+  wiz_label_4: "Wiz 4"      # nome mostrato in HA per la lampada in posizione 4 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
+  wiz_label_5: "Wiz 5"      # nome mostrato in HA per la lampada in posizione 5 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
+  wiz_label_6: "Wiz 6"      # nome mostrato in HA per la lampada in posizione 6 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
+  wiz_label_7: "Wiz 7"      # nome mostrato in HA per la lampada in posizione 7 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
+  wiz_label_8: "Wiz 8"      # nome mostrato in HA per la lampada in posizione 8 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
   wiz_need: "std::max(1, std::min((int) id(wiz_quorum_num).state, id(wiz_n)))"   # lampade che devono rispondere (entità "Quorum Wiz", regolabile da HA/pagina web), mai più di quelle configurate
   wiz_retry_ms: "400"            # ogni quanto rimanda il comando alle lampade che non hanno ancora risposto
   wiz_deadline_ms: "((int) id(wiz_confirm_num).state)"   # tempo massimo per un comando di accensione/spegnimento: entità "Tempo conferma Wiz" (HA/pagina web)
@@ -154,6 +162,8 @@ globals:
   - id: poll_fail         # polling falliti di fila
     type: int
     initial_value: "0"
+  - id: wiz_cap          # luminosità massima % di ogni lampada (entità "Wiz N - luminosità massima"); 0 o 100 = nessun limite
+    type: int16_t[8]
   - id: wiz_dim            # ultimi valori noti di ogni lampada (dalle risposte e dalla sottoscrizione): luminosità %, temperatura K (0 = non in modalità temperatura), RGB (-1 = non in modalità colore)
     type: int16_t[8]
   - id: wiz_kel
@@ -445,6 +455,166 @@ number:
       sorting_group_id: grp_wiz
       sorting_weight: 61
   - platform: template
+    name: "${wiz_label_1} - luminosità massima"
+    id: wiz_max_1
+    icon: mdi:brightness-percent
+    entity_category: config
+    unit_of_measurement: "%"
+    min_value: 10
+    max_value: 100
+    step: 1
+    mode: box
+    optimistic: true
+    restore_value: true
+    initial_value: 100
+    web_server:
+      sorting_group_id: grp_wiz
+      sorting_weight: 71
+    on_value:
+      then:
+        - lambda: 'id(wiz_cap)[0] = (int) x;'
+        - script.execute: wiz_reapply
+  - platform: template
+    name: "${wiz_label_2} - luminosità massima"
+    id: wiz_max_2
+    icon: mdi:brightness-percent
+    entity_category: config
+    unit_of_measurement: "%"
+    min_value: 10
+    max_value: 100
+    step: 1
+    mode: box
+    optimistic: true
+    restore_value: true
+    initial_value: 100
+    web_server:
+      sorting_group_id: grp_wiz
+      sorting_weight: 72
+    on_value:
+      then:
+        - lambda: 'id(wiz_cap)[1] = (int) x;'
+        - script.execute: wiz_reapply
+  - platform: template
+    name: "${wiz_label_3} - luminosità massima"
+    id: wiz_max_3
+    icon: mdi:brightness-percent
+    entity_category: config
+    unit_of_measurement: "%"
+    min_value: 10
+    max_value: 100
+    step: 1
+    mode: box
+    optimistic: true
+    restore_value: true
+    initial_value: 100
+    web_server:
+      sorting_group_id: grp_wiz
+      sorting_weight: 73
+    on_value:
+      then:
+        - lambda: 'id(wiz_cap)[2] = (int) x;'
+        - script.execute: wiz_reapply
+  - platform: template
+    name: "${wiz_label_4} - luminosità massima"
+    id: wiz_max_4
+    icon: mdi:brightness-percent
+    entity_category: config
+    unit_of_measurement: "%"
+    min_value: 10
+    max_value: 100
+    step: 1
+    mode: box
+    optimistic: true
+    restore_value: true
+    initial_value: 100
+    web_server:
+      sorting_group_id: grp_wiz
+      sorting_weight: 74
+    on_value:
+      then:
+        - lambda: 'id(wiz_cap)[3] = (int) x;'
+        - script.execute: wiz_reapply
+  - platform: template
+    name: "${wiz_label_5} - luminosità massima"
+    id: wiz_max_5
+    icon: mdi:brightness-percent
+    entity_category: config
+    unit_of_measurement: "%"
+    min_value: 10
+    max_value: 100
+    step: 1
+    mode: box
+    optimistic: true
+    restore_value: true
+    initial_value: 100
+    web_server:
+      sorting_group_id: grp_wiz
+      sorting_weight: 75
+    on_value:
+      then:
+        - lambda: 'id(wiz_cap)[4] = (int) x;'
+        - script.execute: wiz_reapply
+  - platform: template
+    name: "${wiz_label_6} - luminosità massima"
+    id: wiz_max_6
+    icon: mdi:brightness-percent
+    entity_category: config
+    unit_of_measurement: "%"
+    min_value: 10
+    max_value: 100
+    step: 1
+    mode: box
+    optimistic: true
+    restore_value: true
+    initial_value: 100
+    web_server:
+      sorting_group_id: grp_wiz
+      sorting_weight: 76
+    on_value:
+      then:
+        - lambda: 'id(wiz_cap)[5] = (int) x;'
+        - script.execute: wiz_reapply
+  - platform: template
+    name: "${wiz_label_7} - luminosità massima"
+    id: wiz_max_7
+    icon: mdi:brightness-percent
+    entity_category: config
+    unit_of_measurement: "%"
+    min_value: 10
+    max_value: 100
+    step: 1
+    mode: box
+    optimistic: true
+    restore_value: true
+    initial_value: 100
+    web_server:
+      sorting_group_id: grp_wiz
+      sorting_weight: 77
+    on_value:
+      then:
+        - lambda: 'id(wiz_cap)[6] = (int) x;'
+        - script.execute: wiz_reapply
+  - platform: template
+    name: "${wiz_label_8} - luminosità massima"
+    id: wiz_max_8
+    icon: mdi:brightness-percent
+    entity_category: config
+    unit_of_measurement: "%"
+    min_value: 10
+    max_value: 100
+    step: 1
+    mode: box
+    optimistic: true
+    restore_value: true
+    initial_value: 100
+    web_server:
+      sorting_group_id: grp_wiz
+      sorting_weight: 78
+    on_value:
+      then:
+        - lambda: 'id(wiz_cap)[7] = (int) x;'
+        - script.execute: wiz_reapply
+  - platform: template
     name: "Wiz - pressione lunga: luminosità alternativa"
     id: wiz_alt_brightness
     icon: mdi:brightness-4
@@ -536,6 +706,26 @@ number:
       sorting_group_id: grp_wiz
 
 script:
+  # Cambio di una "luminosità massima": rimanda subito alle lampade i valori attuali della luce (stessa pipeline dei comandi di HA),
+  # così il nuovo limite si applica al volo; a luci spente o durante l'avvio non fa nulla.
+  - id: wiz_reapply
+    mode: restart
+    then:
+      - lambda: |-
+          if (!id(boot_done) || !id(pon_done) || !id(light_on_sensor).state) return;
+          const auto &rv = id(wiz_light)->remote_values;
+          if (!rv.is_on()) return;
+          id(wl_cmd_t) = millis();
+          const int bri = (int) (rv.get_brightness() * 100.0f + 0.5f);
+          const uint8_t cm = (uint8_t) rv.get_color_mode();
+          if (cm == (uint8_t) light::ColorCapability::RGB) {
+            id(wiz_request).execute(true, bri, 0, (int) (rv.get_red() * 255.0f + 0.5f), (int) (rv.get_green() * 255.0f + 0.5f), (int) (rv.get_blue() * 255.0f + 0.5f));
+          } else if (cm == ((uint8_t) light::ColorCapability::COLD_WARM_WHITE | (uint8_t) light::ColorCapability::COLOR_TEMPERATURE)) {
+            const float mired = rv.get_color_temperature();
+            id(wiz_request).execute(true, bri, mired > 0 ? (int) (1000000.0f / mired + 0.5f) : 0, -1, -1, -1);
+          } else {
+            id(wiz_request).execute(true, bri, 0, -1, -1, -1);
+          }
   # Un comando UDP a tutte le lampade (porta 38899), NON bloccante: invia subito, poi controlla le
   # risposte ogni 15 ms lasciando girare il resto di ESPHome (API, BLE proxy, ESP-NOW).
   #   kind 0 = getPilot, 1 = setPilot acceso, 2 = setPilot spento, 3 = setPilot acceso con i valori della luce di HA (custom_msg)
@@ -638,7 +828,23 @@ script:
                     d.sin_family = AF_INET;
                     d.sin_port = htons(38899);
                     d.sin_addr.s_addr = id(wiz_ip32)[i];
-                    id(wiz_sock)->sendto(msg, strlen(msg), 0, (struct sockaddr *) &d, sizeof(d));
+                    // lampade con luminosità massima < 100%: la luminosità del comando (10-100) viene riscalata su 10..massimo
+                    const char *mo = msg; char pm[128];
+                    {
+                      const int cap = id(wiz_cap)[i];
+                      if (cap > 10 && cap < 100) {
+                        const char *dm = strstr(msg, "\"dimming\":");
+                        if (dm != nullptr) {
+                          const int pl = (int) (dm - msg) + 10;
+                          const int v = atoi(dm + 10);
+                          int dl = 0; while (dm[10 + dl] >= '0' && dm[10 + dl] <= '9') dl++;
+                          int nv = 10 + (v - 10) * (cap - 10) / 90; if (nv < 10) nv = 10;
+                          snprintf(pm, sizeof(pm), "%.*s%d%s", pl, msg, nv, msg + pl + dl);
+                          mo = pm;
+                        }
+                      }
+                    }
+                    id(wiz_sock)->sendto(mo, strlen(mo), 0, (struct sockaddr *) &d, sizeof(d));
                   }
                   id(wiz_next) += id(wiz_retry);
                 }
@@ -666,7 +872,7 @@ script:
                     id(wiz_known)[i] = true;
                     {
                     const char *q = strstr(buf, "\"dimming\":");
-                    if (q != nullptr) id(wiz_dim)[i] = atoi(q + 10);
+                    if (q != nullptr) { int vq = atoi(q + 10); const int cq = id(wiz_cap)[i]; if (cq > 10 && cq < 100) vq = 10 + (vq - 10) * 90 / (cq - 10); if (vq > 100) vq = 100; id(wiz_dim)[i] = vq; }
                     q = strstr(buf, "\"temp\":");
                     id(wiz_kel)[i] = q != nullptr ? atoi(q + 7) : 0;
                     q = strstr(buf, "\"r\":");
@@ -1031,7 +1237,7 @@ interval:
                   }
                   {
                     const char *q = strstr(buf, "\"dimming\":");
-                    if (q != nullptr) id(wiz_dim)[i] = atoi(q + 10);
+                    if (q != nullptr) { int vq = atoi(q + 10); const int cq = id(wiz_cap)[i]; if (cq > 10 && cq < 100) vq = 10 + (vq - 10) * 90 / (cq - 10); if (vq > 100) vq = 100; id(wiz_dim)[i] = vq; }
                     q = strstr(buf, "\"temp\":");
                     id(wiz_kel)[i] = q != nullptr ? atoi(q + 7) : 0;
                     q = strstr(buf, "\"r\":");
