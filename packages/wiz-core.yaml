@@ -3,9 +3,17 @@
 # OBBLIGATORIO. Richiede i moduli input e timer (per ora il codice li referenzia).
 
 substitutions:
-  ver_wiz_core: "4.4.0"            # versione del package (stampata nel log all'avvio)
+  ver_wiz_core: "4.4.1"            # versione del package (stampata nel log all'avvio)
   wiz_input_id: "switch_input"
   wiz_group_name: "Luce"
+  wiz_label_1: "Wiz 1"      # nome mostrato in HA per la lampada in posizione 1 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
+  wiz_label_2: "Wiz 2"      # nome mostrato in HA per la lampada in posizione 2 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
+  wiz_label_3: "Wiz 3"      # nome mostrato in HA per la lampada in posizione 3 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
+  wiz_label_4: "Wiz 4"      # nome mostrato in HA per la lampada in posizione 4 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
+  wiz_label_5: "Wiz 5"      # nome mostrato in HA per la lampada in posizione 5 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
+  wiz_label_6: "Wiz 6"      # nome mostrato in HA per la lampada in posizione 6 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
+  wiz_label_7: "Wiz 7"      # nome mostrato in HA per la lampada in posizione 7 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
+  wiz_label_8: "Wiz 8"      # nome mostrato in HA per la lampada in posizione 8 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
   wiz_need: "std::max(1, std::min((int) id(wiz_quorum_num).state, id(wiz_n)))"   # lampade che devono rispondere (entità "Quorum Wiz", regolabile da HA/pagina web), mai più di quelle configurate
   wiz_retry_ms: "400"            # ogni quanto rimanda il comando alle lampade che non hanno ancora risposto
   wiz_deadline_ms: "((int) id(wiz_confirm_num).state)"   # tempo massimo per un comando di accensione/spegnimento: entità "Tempo conferma Wiz" (HA/pagina web)
@@ -448,7 +456,7 @@ number:
       sorting_group_id: grp_wiz
       sorting_weight: 61
   - platform: template
-    name: "Wiz 1 - luminosità massima"
+    name: "${wiz_label_1} - luminosità massima"
     id: wiz_max_1
     icon: mdi:brightness-percent
     entity_category: config
@@ -467,7 +475,7 @@ number:
       then:
         - lambda: 'id(wiz_cap)[0] = (int) x;'
   - platform: template
-    name: "Wiz 2 - luminosità massima"
+    name: "${wiz_label_2} - luminosità massima"
     id: wiz_max_2
     icon: mdi:brightness-percent
     entity_category: config
@@ -486,7 +494,7 @@ number:
       then:
         - lambda: 'id(wiz_cap)[1] = (int) x;'
   - platform: template
-    name: "Wiz 3 - luminosità massima"
+    name: "${wiz_label_3} - luminosità massima"
     id: wiz_max_3
     icon: mdi:brightness-percent
     entity_category: config
@@ -505,7 +513,7 @@ number:
       then:
         - lambda: 'id(wiz_cap)[2] = (int) x;'
   - platform: template
-    name: "Wiz 4 - luminosità massima"
+    name: "${wiz_label_4} - luminosità massima"
     id: wiz_max_4
     icon: mdi:brightness-percent
     entity_category: config
@@ -524,7 +532,7 @@ number:
       then:
         - lambda: 'id(wiz_cap)[3] = (int) x;'
   - platform: template
-    name: "Wiz 5 - luminosità massima"
+    name: "${wiz_label_5} - luminosità massima"
     id: wiz_max_5
     icon: mdi:brightness-percent
     entity_category: config
@@ -543,7 +551,7 @@ number:
       then:
         - lambda: 'id(wiz_cap)[4] = (int) x;'
   - platform: template
-    name: "Wiz 6 - luminosità massima"
+    name: "${wiz_label_6} - luminosità massima"
     id: wiz_max_6
     icon: mdi:brightness-percent
     entity_category: config
@@ -562,7 +570,7 @@ number:
       then:
         - lambda: 'id(wiz_cap)[5] = (int) x;'
   - platform: template
-    name: "Wiz 7 - luminosità massima"
+    name: "${wiz_label_7} - luminosità massima"
     id: wiz_max_7
     icon: mdi:brightness-percent
     entity_category: config
@@ -581,7 +589,7 @@ number:
       then:
         - lambda: 'id(wiz_cap)[6] = (int) x;'
   - platform: template
-    name: "Wiz 8 - luminosità massima"
+    name: "${wiz_label_8} - luminosità massima"
     id: wiz_max_8
     icon: mdi:brightness-percent
     entity_category: config
