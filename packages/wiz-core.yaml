@@ -802,22 +802,22 @@ script:
                     d.sin_port = htons(38899);
                     d.sin_addr.s_addr = id(wiz_ip32)[i];
                     // lampade con luminosità massima < 100%: la luminosità del comando (10-100) viene riscalata su 10..massimo
-          const char *mo = msg; char pm[128];
-          {
-            const int cap = id(wiz_cap)[i];
-            if (cap > 10 && cap < 100) {
-              const char *dm = strstr(msg, "\"dimming\":");
-              if (dm != nullptr) {
-                const int pl = (int) (dm - msg) + 10;
-                const int v = atoi(dm + 10);
-                int dl = 0; while (dm[10 + dl] >= '0' && dm[10 + dl] <= '9') dl++;
-                int nv = 10 + (v - 10) * (cap - 10) / 90; if (nv < 10) nv = 10;
-                snprintf(pm, sizeof(pm), "%.*s%d%s", pl, msg, nv, msg + pl + dl);
-                mo = pm;
-              }
-            }
-          }
-          id(wiz_sock)->sendto(mo, strlen(mo), 0, (struct sockaddr *) &d, sizeof(d));
+                    const char *mo = msg; char pm[128];
+                    {
+                      const int cap = id(wiz_cap)[i];
+                      if (cap > 10 && cap < 100) {
+                        const char *dm = strstr(msg, "\"dimming\":");
+                        if (dm != nullptr) {
+                          const int pl = (int) (dm - msg) + 10;
+                          const int v = atoi(dm + 10);
+                          int dl = 0; while (dm[10 + dl] >= '0' && dm[10 + dl] <= '9') dl++;
+                          int nv = 10 + (v - 10) * (cap - 10) / 90; if (nv < 10) nv = 10;
+                          snprintf(pm, sizeof(pm), "%.*s%d%s", pl, msg, nv, msg + pl + dl);
+                          mo = pm;
+                        }
+                      }
+                    }
+                    id(wiz_sock)->sendto(mo, strlen(mo), 0, (struct sockaddr *) &d, sizeof(d));
                   }
                   id(wiz_next) += id(wiz_retry);
                 }
