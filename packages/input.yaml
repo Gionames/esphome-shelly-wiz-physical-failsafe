@@ -1,4 +1,4 @@
-# input.yaml (v4.2.3) - ingresso fisico: modalità interruttore/pulsante, pressione lunga, blocco/inversione.
+# input.yaml (v4.2.4) - ingresso fisico: modalità interruttore/pulsante, pressione lunga, blocco/inversione.
 # Obiettivo: usabile anche con luci non Wiz. ATTENZIONE: per ora chiama ancora sw_changed e variabili del core (wiz-core.yaml); il disaccoppiamento è da fare.
 # Richiede wiz-core.
 
@@ -334,12 +334,19 @@ script:
                       }
                       id(dim_x) = x;
                       id(dim_pct) = (int) std::lround(10.0f + 90.0f * x * x);
-                      // dim to warm: la temperatura scende con la luminosità, da quella di accensione (x = 1) a "temperatura al minimo" (x = 0, 1000-6500 K, default 1800 K).
-                      // Se la temperatura al minimo non è più bassa di quella di accensione, il colore non viene toccato (solo al primo passo da spenta).
+                      // dim to warm. Temperatura "al minimo" (km) e di accensione (kh = x 1):
+                      //  - km >= kh: il colore non viene toccato (solo al primo passo da spenta invia kh)
+                      //  - 2200 <= km < kh: solo bianco, da km (x 0) a kh (x 1)
+                      //  - km < 2200 (le Wiz non scendono col bianco): bianco da 2200 K (al 20%) a kh (al 100%); sotto il 20% di luminosità
+                      //    entrano i LED colorati (percorso RGB più avanti) per imitare km. Sopra il 20% niente LED colorati.
                       const float kh = id(wiz_on_kelvin).state;
-                      const float kl = std::min(id(dim_kmin).state, kh);
-                      if (kl < kh) id(dim_k) = (int) std::lround(kl + (kh - kl) * x);
-                      else id(dim_k) = id(dim_first) ? (int) kh : 0;
+                      const float km = id(dim_kmin).state;
+                      if (km >= kh) id(dim_k) = id(dim_first) ? (int) kh : 0;
+                      else if (km >= 2200.0f) id(dim_k) = (int) std::lround(km + (kh - km) * x);
+                      else if (id(dim_pct) >= 20) {
+                        const float s = std::max(0.0f, std::min(1.0f, (x - 0.33333f) / 0.66667f));   // 0 al 20% (x = 1/3), 1 al 100%
+                        id(dim_k) = (int) std::lround(2200.0f + (std::max(kh, 2200.0f) - 2200.0f) * s);
+                      } else id(dim_k) = (int) std::lround(km);   // < 2200: percorso RGB
                       id(dim_first) = false;
                   - if:
                       condition:
@@ -357,9 +364,9 @@ script:
                         # sotto 2200 K le Wiz non scendono con il bianco: oltre al bianco caldo (che cala) si accendono i LED colorati
                         # (colore del corpo nero a quella temperatura, in proporzione crescente). La luminosità resta quella della curva (dimming).
                         - lambda: |-
-                            const float k = (float) id(dim_k);
-                            const float t0 = std::max(0.0f, std::min(1.0f, (2200.0f - k) / 1200.0f));   // 0 a 2200 K, 1 a 1000 K
-                            const float tt = t0 * t0;   // ingresso graduale: a 2200 K i LED colorati sono spenti, poi salgono piano (evita lo scatto del rosso al passaggio)
+                            const float k = id(dim_kmin).state;   // temperatura da imitare (< 2200 K)
+                            const float u = std::max(0.0f, std::min(1.0f, (20.0f - (float) id(dim_pct)) / 10.0f));   // 0 al 20% di luminosità, 1 al 10%
+                            const float tt = u * u;   // ingresso graduale: sopra il 20% i LED colorati sono spenti
                             const float T = k / 100.0f;
                             const float gf = 99.4708025861f * std::log(T) - 161.1195681661f;
                             const float bf = (T <= 19.0f) ? 0.0f : 138.5177312231f * std::log(T - 10.0f) - 305.0447927307f;
@@ -375,7 +382,7 @@ script:
                   - delay: !lambda 'return (uint32_t) id(dim_step).state;'
 
 substitutions:
-  ver_input: "4.2.3"   # versione del package (stampata nel log all'avvio)
+  ver_input: "4.2.4"   # versione del package (stampata nel log all'avvio)
 
 esphome:
   on_boot:
