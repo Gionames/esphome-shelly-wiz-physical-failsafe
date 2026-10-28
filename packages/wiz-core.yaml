@@ -3,7 +3,7 @@
 # OBBLIGATORIO. Richiede i moduli input e timer (per ora il codice li referenzia).
 
 substitutions:
-  ver_wiz_core: "4.4.1"            # versione del package (stampata nel log all'avvio)
+  ver_wiz_core: "4.4.2"            # versione del package (stampata nel log all'avvio)
   wiz_input_id: "switch_input"
   wiz_group_name: "Luce"
   wiz_label_1: "Wiz 1"      # nome mostrato in HA per la lampada in posizione 1 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
@@ -164,7 +164,6 @@ globals:
     initial_value: "0"
   - id: wiz_cap          # luminosità massima % di ogni lampada (entità "Wiz N - luminosità massima"); 0 o 100 = nessun limite
     type: int16_t[8]
-    initial_value: "0"
   - id: wiz_dim            # ultimi valori noti di ogni lampada (dalle risposte e dalla sottoscrizione): luminosità %, temperatura K (0 = non in modalità temperatura), RGB (-1 = non in modalità colore)
     type: int16_t[8]
   - id: wiz_kel
