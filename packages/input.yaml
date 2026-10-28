@@ -1,4 +1,4 @@
-# input.yaml (v4.3.2) - ingresso fisico: modalità interruttore/pulsante, pressione lunga, blocco/inversione.
+# input.yaml (v4.3.3) - ingresso fisico: modalità interruttore/pulsante, pressione lunga, blocco/inversione.
 # Obiettivo: usabile anche con luci non Wiz. ATTENZIONE: per ora chiama ancora sw_changed e variabili del core (wiz-core.yaml); il disaccoppiamento è da fare.
 # Richiede wiz-core.
 
@@ -367,14 +367,14 @@ script:
                       else:
                         # con temperatura al minimo < 2200 K e tasto ancora premuto al minimo (10%, 2200 K): le Wiz non scendono col bianco, quindi entrano i LED colorati (arancio -> arancio scuro, come il preferito)
                         - lambda: |-
-                            // y 0 -> 0.2: dissolvenza dal bianco (2200 K) ai LED colorati, arancio con rosso e verde in proporzione 2:1
-                            // y 0.2 -> 1: il verde scende fino a 85: rosso:verde:blu = 255:85:0 = 33:11:0, come il preferito "arancio scuro". Luminosità ferma al minimo.
+                            // y 0 -> 0.2: dissolvenza dal bianco (2200 K) ai LED colorati, con una combinazione RGB simile a 2200 K (255:146:39).
+                            // y 0.2 -> 1: verde e blu scendono fino a 255:85:0 (= 33:11:0), la proporzione del preferito "arancio scuro". Luminosità (dimming) ferma al minimo.
                             const float y = id(dim_y);
                             const float f = std::min(1.0f, y / 0.2f);
                             const float v = std::max(0.0f, (y - 0.2f) / 0.8f);
                             const int rr = (int) std::lround(255.0f * f);
-                            const int gg = (int) std::lround((128.0f - 43.0f * v) * f);   // verde da 128 (rosso:verde 2:1) a 85 (3:1, come il preferito)
-                            const int bb = 0;
+                            const int gg = (int) std::lround((146.0f - 61.0f * v) * f);   // verde da 146 (RGB simile a 2200 K) a 85 (3:1, come il preferito)
+                            const int bb = (int) std::lround(39.0f * (1.0f - v) * f);      // blu da 39 (RGB simile a 2200 K) a 0
                             const int ww = (int) std::lround(255.0f * (1.0f - f));
                             if (id(light_on_sensor).state && id(auto_off_sw).state) id(tmr_arm).execute(1);   // come wiz_request: solo con luce accesa e auto-off attivo
                             snprintf(&id(custom_msg)[0], 112, "{\"method\":\"setPilot\",\"params\":{\"state\":true,\"dimming\":%d,\"r\":%d,\"g\":%d,\"b\":%d,\"w\":%d}}", id(dim_pct), rr, gg, bb, ww);
@@ -384,7 +384,7 @@ script:
                   - delay: !lambda 'return (uint32_t) id(dim_step).state;'
 
 substitutions:
-  ver_input: "4.3.2"   # versione del package (stampata nel log all'avvio)
+  ver_input: "4.3.3"   # versione del package (stampata nel log all'avvio)
 
 esphome:
   on_boot:
