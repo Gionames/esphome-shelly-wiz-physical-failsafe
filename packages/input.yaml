@@ -8,6 +8,7 @@ select:
     id: input_mode_select
     web_server:
       sorting_group_id: grp_ingresso
+      sorting_weight: 10
     icon: mdi:light-switch
     entity_category: config
     optimistic: true
@@ -24,6 +25,7 @@ select:
     id: cmd_timing_select
     web_server:
       sorting_group_id: grp_ingresso
+      sorting_weight: 60
     icon: mdi:gesture-tap-button
     entity_category: config
     optimistic: true
@@ -36,7 +38,8 @@ select:
     name: "Wiz - pressione lunga"
     id: longpress_select
     web_server:
-      sorting_group_id: grp_ingresso
+      sorting_group_id: grp_dimmer
+      sorting_weight: 10
     icon: mdi:gesture-tap-hold
     entity_category: config
     optimistic: true
@@ -114,7 +117,8 @@ text_sensor:
     update_interval: 1h
     lambda: 'return {"Pressione = comando subito (pressione lunga: la luce si spegne e poi passa ai valori alternativi). Rilascio = comando al rilascio, nessun lampeggio ma ritardo pari alla durata del tocco."};'
     web_server:
-      sorting_group_id: grp_diag
+      sorting_group_id: grp_ingresso
+      sorting_weight: 61
   - platform: template
     name: "Wiz - guida pressione lunga"
     icon: mdi:information-outline
@@ -122,7 +126,8 @@ text_sensor:
     update_interval: 1h
     lambda: 'return {"Solo in modalità a pulsante. Alla durata impostata: luminosità e colore alternativi (accende se spenta) oppure evento a Home Assistant. In failsafe non agisce."};'
     web_server:
-      sorting_group_id: grp_diag
+      sorting_group_id: grp_dimmer
+      sorting_weight: 11
 
 switch:
   - platform: template
@@ -134,6 +139,7 @@ switch:
     restore_mode: RESTORE_DEFAULT_OFF
     web_server:
       sorting_group_id: grp_ingresso
+      sorting_weight: 20
   - platform: template
     name: "Inverti ingresso"
     id: input_invert
@@ -148,6 +154,7 @@ switch:
       - lambda: 'id(sw_last) = -1;'
     web_server:
       sorting_group_id: grp_ingresso
+      sorting_weight: 30
 
 number:
   - platform: template
@@ -164,7 +171,8 @@ number:
     restore_value: true
     initial_value: 0.4
     web_server:
-      sorting_group_id: grp_ingresso
+      sorting_group_id: grp_dimmer
+      sorting_weight: 20
   - platform: template
     name: "Wiz - dimmer: durata rampa"
     id: dim_ramp_s
@@ -179,7 +187,8 @@ number:
     restore_value: true
     initial_value: 2
     web_server:
-      sorting_group_id: grp_ingresso
+      sorting_group_id: grp_dimmer
+      sorting_weight: 50
   - platform: template
     name: "Wiz - dimmer: temperatura al minimo"
     id: dim_kmin
@@ -194,7 +203,8 @@ number:
     restore_value: true
     initial_value: 1000
     web_server:
-      sorting_group_id: grp_ingresso
+      sorting_group_id: grp_dimmer
+      sorting_weight: 54
   - platform: template
     name: "Wiz - dimmer: intervallo passo"
     id: dim_step
@@ -209,7 +219,8 @@ number:
     restore_value: true
     initial_value: 150
     web_server:
-      sorting_group_id: grp_ingresso
+      sorting_group_id: grp_dimmer
+      sorting_weight: 53
   - platform: template
     name: "Wiz - dimmer: fase colore, curva del bianco"
     id: dim_wp
@@ -223,7 +234,8 @@ number:
     restore_value: true
     initial_value: 3
     web_server:
-      sorting_group_id: grp_ingresso
+      sorting_group_id: grp_dimmer
+      sorting_weight: 52
   - platform: template
     name: "Wiz - dimmer: durata rampa colore"
     id: dim_rc
@@ -238,7 +250,8 @@ number:
     restore_value: true
     initial_value: 1
     web_server:
-      sorting_group_id: grp_ingresso
+      sorting_group_id: grp_dimmer
+      sorting_weight: 51
 
 button:
   - platform: template
@@ -247,7 +260,8 @@ button:
     icon: mdi:gesture-tap-hold
     entity_category: config
     web_server:
-      sorting_group_id: grp_ingresso
+      sorting_group_id: grp_dimmer
+      sorting_weight: 40
     on_press:
       # secondo tocco mentre sta "premendo": rilascia subito
       - if:
@@ -268,6 +282,7 @@ event:
       - pressione_lunga
     web_server:
       sorting_group_id: grp_ingresso
+      sorting_weight: 40
 
 globals:
   - id: dim_y          # fase LED colorati: 0 = nessuno (solo bianco), 1 = rosso puro
