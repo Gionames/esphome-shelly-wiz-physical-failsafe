@@ -1,4 +1,4 @@
-# input.yaml (v4.1.2) - ingresso fisico: modalità interruttore/pulsante, pressione lunga, blocco/inversione.
+# input.yaml (v4.3.9) - ingresso fisico: modalità interruttore/pulsante, pressione lunga, blocco/inversione.
 # Obiettivo: usabile anche con luci non Wiz. ATTENZIONE: per ora chiama ancora sw_changed e variabili del core (wiz-core.yaml); il disaccoppiamento è da fare.
 # Richiede wiz-core.
 
@@ -45,7 +45,7 @@ select:
       - "Imposta luminosità e colore alternativi alle Wiz"
       - "Manda l'evento a Home Assistant"
       - "Dimmer: tenendo premuto la luminosità sale o scende"
-    initial_option: "Imposta luminosità e colore alternativi alle Wiz"
+    initial_option: "Dimmer: tenendo premuto la luminosità sale o scende"
     restore_value: true
 
 binary_sensor:
@@ -56,7 +56,8 @@ binary_sensor:
     internal: true
     lambda: |-
       if (!id(${wiz_input_id}).has_state()) return {};
-      return id(${wiz_input_id}).state != id(input_invert).state;
+      // sim_press: tasto simulato da "Wiz - simula pressione lunga" (stesso percorso del tasto fisico)
+      return (id(${wiz_input_id}).state != id(input_invert).state) || id(sim_press);
     on_state:
       then:
         - lambda: |-
@@ -161,7 +162,7 @@ number:
     mode: box
     optimistic: true
     restore_value: true
-    initial_value: 1
+    initial_value: 0.4
     web_server:
       sorting_group_id: grp_ingresso
   - platform: template
@@ -176,7 +177,7 @@ number:
     mode: box
     optimistic: true
     restore_value: true
-    initial_value: 4
+    initial_value: 2
     web_server:
       sorting_group_id: grp_ingresso
   - platform: template
@@ -185,13 +186,13 @@ number:
     icon: mdi:thermometer-low
     entity_category: config
     unit_of_measurement: "K"
-    min_value: 2200
-    max_value: 6500
+    min_value: 1000
+    max_value: 2700
     step: 100
     mode: box
     optimistic: true
     restore_value: true
-    initial_value: 2200
+    initial_value: 1000
     web_server:
       sorting_group_id: grp_ingresso
   - platform: template
@@ -206,9 +207,57 @@ number:
     mode: box
     optimistic: true
     restore_value: true
-    initial_value: 250
+    initial_value: 150
     web_server:
       sorting_group_id: grp_ingresso
+  - platform: template
+    name: "Wiz - dimmer: fase colore, curva del bianco"
+    id: dim_wp
+    icon: mdi:chart-bell-curve
+    entity_category: config
+    min_value: 1
+    max_value: 8
+    step: 0.5
+    mode: box
+    optimistic: true
+    restore_value: true
+    initial_value: 3
+    web_server:
+      sorting_group_id: grp_ingresso
+  - platform: template
+    name: "Wiz - dimmer: durata rampa colore"
+    id: dim_rc
+    icon: mdi:timer-sand
+    entity_category: config
+    unit_of_measurement: "s"
+    min_value: 0.5
+    max_value: 10
+    step: 0.5
+    mode: box
+    optimistic: true
+    restore_value: true
+    initial_value: 1
+    web_server:
+      sorting_group_id: grp_ingresso
+
+button:
+  - platform: template
+    name: "Wiz - simula pressione lunga"
+    id: sim_btn
+    icon: mdi:gesture-tap-hold
+    entity_category: config
+    web_server:
+      sorting_group_id: grp_ingresso
+    on_press:
+      # secondo tocco mentre sta "premendo": rilascia subito
+      - if:
+          condition:
+            script.is_running: sim_hold
+          then:
+            - script.stop: sim_hold
+            - lambda: 'id(sim_press) = false;'
+          else:
+            - script.execute: sim_hold
 
 event:
   - platform: template
@@ -221,6 +270,12 @@ event:
       sorting_group_id: grp_ingresso
 
 globals:
+  - id: dim_y          # fase LED colorati: 0 = nessuno (solo bianco), 1 = rosso puro
+    type: float
+    initial_value: "0"
+  - id: sim_press      # tasto simulato premuto (pulsante "Wiz - simula pressione lunga")
+    type: bool
+    initial_value: "false"
   # dimmer continuo (pressione lunga, opzione "Dimmer")
   - id: dim_x          # posizione sulla curva, 0 (minimo) - 1 (massimo)
     type: float
@@ -242,6 +297,18 @@ globals:
     initial_value: "0"
 
 script:
+  # simula il tasto a muro tenuto premuto: con il dimmer lo tiene premuto finché la rampa non arriva a fine corsa
+  # (durata = "Wiz - dimmer: durata rampa" più "durata rampa colore" con la fase LED colorati; limite di sicurezza: +1 s), con le altre azioni lo rilascia subito dopo la soglia
+  - id: sim_hold
+    mode: single
+    then:
+      - lambda: 'id(sim_press) = true;'
+      - delay: !lambda 'return (uint32_t) (id(lp_threshold).state * 1000.0f) + 300;'
+      - wait_until:
+          condition:
+            lambda: 'return id(dim_end) || id(longpress_select).active_index().value_or(0) != 3;'
+          timeout: !lambda 'return (uint32_t) (id(dim_ramp_s).state * 1000.0f + (id(dim_kmin).state < 2200.0f ? id(dim_rc).state * 1000.0f : 0.0f)) + 1000;'
+      - lambda: 'id(sim_press) = false;'
   # pressione lunga (solo modalità a pulsante): scatta alla soglia, senza aspettare il rilascio
   - id: longpress_wait
     mode: restart
@@ -267,11 +334,12 @@ script:
             if (id(failsafe_mode)) { id(dim_end) = true; } else {
               const bool on = id(light_on_sensor).state;
               if (!on) {
-                id(dim_x) = 0.0f; id(dim_up) = true; id(dim_first) = true;
+                id(dim_x) = 0.0f; id(dim_y) = 0.0f; id(dim_up) = true; id(dim_first) = true;
               } else {
                 int pct = id(lst_bri);
                 if (pct <= 0) pct = 100;
                 id(dim_x) = std::sqrt(std::max(0.0f, std::min(1.0f, (pct - 10) / 90.0f)));
+                if (pct > 10) id(dim_y) = 0.0f;   // fuori dal minimo la fase LED colorati si azzera
                 if (pct >= 100) id(dim_up) = false;
                 else if (pct <= 10) id(dim_up) = true;
                 else id(dim_up) = !id(dim_up);
@@ -292,30 +360,64 @@ script:
                   - lambda: |-
                       const float rs = std::max(0.5f, id(dim_ramp_s).state);
                       const float step = id(dim_step).state / 1000.0f / rs;
-                      float x = id(dim_x) + (id(dim_up) ? step : -step);
-                      if (x >= 1.0f) { x = 1.0f; id(dim_end) = true; }
-                      if (x <= 0.0f) { x = 0.0f; id(dim_end) = true; }
+                      const float stepc = id(dim_step).state / 1000.0f / std::max(0.2f, id(dim_rc).state);   // la parte colore ha una durata propria
+                      float x = id(dim_x);
+                      float y = id(dim_y);
+                      if (!id(dim_first)) {   // da spenta il primo passo è proprio x = 0 (10% e temperatura minima), poi si sale
+                        if (id(dim_up)) {
+                          if (y > 0.0f) y = std::max(0.0f, y - stepc);                               // prima si esce dalla fase LED colorati
+                          else { x = std::min(1.0f, x + step); if (x >= 1.0f) id(dim_end) = true; }
+                        } else {
+                          if (x > 0.0f) {
+                            x = std::max(0.0f, x - step);                                           // curva bianca: 100% -> 10%, 2700 K -> temperatura al minimo (>= 2200 K)
+                            if (x <= 0.0f && !(id(dim_kmin).state < 2200.0f)) id(dim_end) = true;   // niente LED colorati: la rampa finisce al minimo bianco
+                          } else { y = std::min(1.0f, y + stepc); if (y >= 1.0f) id(dim_end) = true; }   // temperatura al minimo < 2200 K e ancora premuto: LED colorati
+                        }
+                      }
                       id(dim_x) = x;
+                      id(dim_y) = y;
                       id(dim_pct) = (int) std::lround(10.0f + 90.0f * x * x);
-                      // dim to warm: la temperatura scende con la luminosità, da quella di accensione (x = 1) a "temperatura al minimo" (x = 0).
-                      // Se la temperatura al minimo non è più bassa di quella di accensione, il colore non viene toccato (solo al primo passo da spenta).
-                      const float kh = id(wiz_on_kelvin).state;
-                      const float kl = std::min(id(dim_kmin).state, kh);
-                      if (kl < kh) id(dim_k) = (int) std::lround(kl + (kh - kl) * x);
-                      else id(dim_k) = id(dim_first) ? (int) kh : 0;
+                      // dim to warm (solo bianco): al massimo di luminosità (x = 1) sempre 2700 K; scendendo la temperatura cala fino a 2200 K al minimo (x = 0).
+                      // Sotto 2200 K (temperatura al minimo < 2200) il bianco si ferma a 2200 K e prosegue con i LED colorati (fase y).
+                      const float kh = 2700.0f;
+                      const float kl = std::min(std::max(id(dim_kmin).state, 2200.0f), kh);
+                      id(dim_k) = (int) std::lround(kl + (kh - kl) * x);
                       id(dim_first) = false;
-                  - script.execute:
-                      id: wiz_request
-                      power: true
-                      bri: !lambda 'return id(dim_pct);'
-                      kelvin: !lambda 'return id(dim_k);'
-                      r: -1
-                      g: -1
-                      b: -1
+                  - if:
+                      condition:
+                        lambda: 'return id(dim_y) <= 0.0f;'
+                      then:
+                        - script.execute:
+                            id: wiz_request
+                            power: true
+                            bri: !lambda 'return id(dim_pct);'
+                            kelvin: !lambda 'return id(dim_k);'
+                            r: -1
+                            g: -1
+                            b: -1
+                      else:
+                        # con temperatura al minimo < 2200 K e tasto ancora premuto al minimo (10%, 2200 K): le Wiz non scendono col bianco, quindi entrano i LED colorati (arancio -> arancio scuro, come il preferito)
+                        - lambda: |-
+                            // fase LED colorati (y 0 -> 1): dal bianco caldo 2200 K ai soli LED colorati (tono da 255:146:0 a 255:85:0 = 33:11:0, il preferito "arancio scuro").
+                            // Il LED bianco rende molta più luce dei colorati: se si spegnesse in modo lineare il colore resterebbe "bianco" fin quasi alla fine e poi
+                            // cadrebbe di colpo (il gradino). Il bianco cala quindi con curva (1-y)^p (p = "curva bianco", default 3) e i colorati salgono con y^0,6.
+                            // LED blu e bianco freddo sempre spenti. Luminosità (dimming) ferma al minimo.
+                            const float y = id(dim_y);
+                            const float p = std::max(1.0f, id(dim_wp).state);
+                            const float cs = std::pow(y, 0.6f);
+                            const int rr = (int) std::lround(255.0f * cs);
+                            const int gg = (int) std::lround((146.0f - 61.0f * y) * cs);
+                            const int bb = 0;
+                            const int ww = (int) std::lround(255.0f * std::pow(1.0f - y, p));
+                            if (id(light_on_sensor).state && id(auto_off_sw).state) id(tmr_arm).execute(1);   // come wiz_request: solo con luce accesa e auto-off attivo
+                            snprintf(&id(custom_msg)[0], 112, "{\"method\":\"setPilot\",\"params\":{\"state\":true,\"dimming\":%d,\"r\":%d,\"g\":%d,\"b\":%d,\"w\":%d,\"c\":0}}", id(dim_pct), rr, gg, bb, ww);
+                            id(custom_bri) = id(dim_pct);
+                            id(sw_action) = 3;
+                        - script.execute: sw_changed
                   - delay: !lambda 'return (uint32_t) id(dim_step).state;'
 
 substitutions:
-  ver_input: "4.1.2"   # versione del package (stampata nel log all'avvio)
+  ver_input: "4.3.9"   # versione del package (stampata nel log all'avvio)
 
 esphome:
   on_boot:
