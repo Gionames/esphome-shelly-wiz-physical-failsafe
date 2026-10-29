@@ -3,7 +3,7 @@
 # OBBLIGATORIO. Richiede i moduli input e timer (per ora il codice li referenzia).
 
 substitutions:
-  ver_wiz_core: "4.4.3"            # versione del package (stampata nel log all'avvio)
+  ver_wiz_core: "4.4.4"            # versione del package (stampata nel log all'avvio)
   wiz_input_id: "switch_input"
   wiz_group_name: "Luce"
   wiz_label_1: "Wiz 1"      # nome mostrato in HA per la lampada in posizione 1 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
@@ -401,6 +401,8 @@ light:
                 same = id(lst_kel) > 0 && abs(k0 - id(lst_kel)) <= 150;
               }
             }
+            // dopo un riavvio la luce di HA riparte dal valore di default (100%, temperatura a metà scala = 304 mired): anche questa è un'accensione semplice
+            if (!same && !(cm0 & (uint8_t) light::ColorCapability::RGB) && bri >= 98 && fabsf(rv.get_color_temperature() - 304.3f) <= 3.0f) same = true;
             if (same) {
               id(wiz_request).execute(true, -1, 0, -1, -1, -1);
               return;
