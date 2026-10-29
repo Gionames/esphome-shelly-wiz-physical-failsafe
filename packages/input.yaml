@@ -289,6 +289,9 @@ globals:
   - id: dim_first      # primo passo partendo da luce spenta
     type: bool
     initial_value: "false"
+  - id: dim_hold       # primo passo da spenta: aspetta che la Wiz si accenda sul colore di partenza prima di far partire la rampa
+    type: bool
+    initial_value: "false"
   - id: dim_pct        # luminosità % del passo corrente
     type: int
     initial_value: "10"
@@ -334,7 +337,7 @@ script:
             if (id(failsafe_mode)) { id(dim_end) = true; } else {
               const bool on = id(light_on_sensor).state;
               if (!on) {
-                id(dim_x) = 0.0f; id(dim_y) = 0.0f; id(dim_up) = true; id(dim_first) = true;
+                id(dim_x) = 0.0f; id(dim_y) = (id(dim_kmin).state < 2200.0f) ? 1.0f : 0.0f; id(dim_up) = true; id(dim_first) = true;   // da spenta parte dal minimo assoluto: arancio scuro (fine fase LED colorati) se la temperatura al minimo è < 2200 K, altrimenti 10% bianco
               } else {
                 int pct = id(lst_bri);
                 if (pct <= 0) pct = 100;
@@ -382,6 +385,7 @@ script:
                       const float kh = 2700.0f;
                       const float kl = std::min(std::max(id(dim_kmin).state, 2200.0f), kh);
                       id(dim_k) = (int) std::lround(kl + (kh - kl) * x);
+                      id(dim_hold) = id(dim_first);
                       id(dim_first) = false;
                   - if:
                       condition:
@@ -414,10 +418,22 @@ script:
                             id(custom_bri) = id(dim_pct);
                             id(sw_action) = 3;
                         - script.execute: sw_changed
+                  # da spenta: la Wiz impiega un po' ad accendersi; senza questa attesa i passi successivi (che annullano quello in corso) la fanno comparire già su un altro colore
+                  - if:
+                      condition:
+                        lambda: 'return id(dim_hold);'
+                      then:
+                        - delay: 150ms
+                        - wait_until:
+                            condition:
+                              lambda: 'return !id(wiz_busy);'
+                            timeout: 3s
+                        - delay: 800ms
+                        - lambda: 'id(dim_hold) = false;'
                   - delay: !lambda 'return (uint32_t) id(dim_step).state;'
 
 substitutions:
-  ver_input: "4.3.9"   # versione del package (stampata nel log all'avvio)
+  ver_input: "4.3.11"   # versione del package (stampata nel log all'avvio)
 
 esphome:
   on_boot:
