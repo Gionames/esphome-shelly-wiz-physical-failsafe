@@ -202,7 +202,7 @@ web_server:
       name: "${wiz_group_name}"
       sorting_weight: 10
     - id: grp_accensione
-      name: "Power-on values"
+      name: "Power-on brightness values"
       sorting_weight: 20
     - id: grp_limiti
       name: "Brightness limits"
