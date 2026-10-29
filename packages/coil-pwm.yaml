@@ -43,7 +43,7 @@ text_sensor:
     name: "Versione - coil-pwm"
     id: ver_coil_pwm_ts
     icon: mdi:tag-outline
-    entity_category: diagnostic
+    entity_category: config
     update_interval: never
     web_server:
       sorting_group_id: grp_ver
@@ -51,7 +51,7 @@ text_sensor:
   - platform: template
     name: "Bobina relè: cosa fa"
     icon: mdi:information-outline
-    entity_category: diagnostic
+    entity_category: config
     update_interval: 1h
     lambda: 'return {"Dopo lo scatto il relè resta chiuso con corrente ridotta (PWM): meno calore e consumo"};'
     web_server:
@@ -60,7 +60,7 @@ text_sensor:
   - platform: template
     name: "Bobina relè: scatto"
     icon: mdi:information-outline
-    entity_category: diagnostic
+    entity_category: config
     update_interval: 1h
     lambda: 'return {"Nei primi 200 ms dopo ogni chiusura la bobina è al 100%"};'
     web_server:
@@ -69,7 +69,7 @@ text_sensor:
   - platform: template
     name: "Bobina relè: regolazione"
     icon: mdi:information-outline
-    entity_category: diagnostic
+    entity_category: config
     update_interval: 1h
     lambda: 'return {"Mantenimento da 30 a 100%. 100% = PWM spento (originale)"};'
     web_server:
@@ -78,7 +78,7 @@ text_sensor:
   - platform: template
     name: "Bobina relè: se vibra"
     icon: mdi:information-outline
-    entity_category: diagnostic
+    entity_category: config
     update_interval: 1h
     lambda: 'return {"Se il relè vibra o ricade, alza il valore (60-70%) o torna a 100%"};'
     web_server:
