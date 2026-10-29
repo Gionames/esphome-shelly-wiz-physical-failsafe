@@ -5,7 +5,7 @@
 substitutions:
   ver_wiz_core: "4.5.0-test"            # versione del package (stampata nel log all'avvio)
   wiz_input_id: "switch_input"
-  wiz_group_name: "Luce"
+  wiz_group_name: "Light"
   wiz_label_1: "Wiz 1"      # nome mostrato in HA per la lampada in posizione 1 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
   wiz_label_2: "Wiz 2"      # nome mostrato in HA per la lampada in posizione 2 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
   wiz_label_3: "Wiz 3"      # nome mostrato in HA per la lampada in posizione 3 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
@@ -202,16 +202,16 @@ web_server:
       name: "${wiz_group_name}"
       sorting_weight: 10
     - id: grp_accensione
-      name: "Valori di accensione"
+      name: "Power-on values"
       sorting_weight: 20
     - id: grp_limiti
-      name: "Limiti di luminosità"
+      name: "Brightness limits"
       sorting_weight: 30
     - id: grp_ingresso
-      name: "Ingresso e pulsante"
+      name: "Input and button"
       sorting_weight: 40
     - id: grp_dimmer
-      name: "Pressione lunga e dimmer"
+      name: "Long press and dimmer"
       sorting_weight: 50
     - id: grp_timer
       name: "Timer"
@@ -220,13 +220,13 @@ web_server:
       name: "Failsafe"
       sorting_weight: 70
     - id: grp_rele
-      name: "Relè"
+      name: "Relay and coil-pwm settings"
       sorting_weight: 80
     - id: grp_misure
-      name: "Misure"
+      name: "Measurements"
       sorting_weight: 85
     - id: grp_diag
-      name: "Sistema"
+      name: "System"
       sorting_weight: 93
 
 time:
@@ -1463,6 +1463,7 @@ esphome:
   on_boot:
     - priority: 900
       then:
+        - delay: 2s   # dopo l'avvio dei componenti, altrimenti lo stato della versione resta vuoto
         - text_sensor.template.publish:
             id: ver_wiz_core_ts
             state: "${ver_wiz_core}"
