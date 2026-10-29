@@ -217,7 +217,7 @@ web_server:
       name: "Timer"
       sorting_weight: 60
     - id: grp_wiz
-      name: "Comunicazione Wiz e failsafe"
+      name: "Failsafe"
       sorting_weight: 70
     - id: grp_rele
       name: "Relè e protezioni"
@@ -289,7 +289,7 @@ binary_sensor:
     entity_category: diagnostic
     web_server:
       sorting_group_id: grp_wiz
-      sorting_weight: 70
+      sorting_weight: 10
     lambda: 'return id(failsafe_mode);'
     on_press:
       - lambda: |-
@@ -323,7 +323,7 @@ sensor:
     lambda: 'return (float) id(fs_count);'
     web_server:
       sorting_group_id: grp_wiz
-      sorting_weight: 73
+      sorting_weight: 13
 
 text_sensor:
   - platform: template
@@ -343,7 +343,7 @@ text_sensor:
     update_interval: 1s
     web_server:
       sorting_group_id: grp_wiz
-      sorting_weight: 72
+      sorting_weight: 12
     # pubblica solo quando il testo cambia (prima ripubblicava ogni secondo: traffico inutile verso API e pagina web)
     lambda: |-
       static std::string last;
@@ -364,7 +364,7 @@ text_sensor:
       return ESPTime::from_epoch_local(id(fs_last_epoch)).strftime("%d/%m/%Y %H:%M:%S");
     web_server:
       sorting_group_id: grp_wiz
-      sorting_weight: 74
+      sorting_weight: 14
 
 # Luce nativa per HA: una sola entità light.* (on/off, luminosità, colore, temperatura). L'"uscita" è finta (una sola, usata per tutti i canali): la luce serve solo a
 # dichiarare a HA cosa sa fare. Ogni cambio di HA diventa un comando wiz_request (conferma e failsafe come il pulsante fisico),
@@ -439,7 +439,7 @@ switch:
       - script.execute: fs_recover
     web_server:
       sorting_group_id: grp_wiz
-      sorting_weight: 71
+      sorting_weight: 11
 
 number:
   - platform: template
@@ -680,6 +680,7 @@ number:
     initial_value: 2
     web_server:
       sorting_group_id: grp_wiz
+      sorting_weight: 21
   - platform: template
     name: "Tempo conferma Wiz"
     id: wiz_confirm_num
@@ -695,6 +696,7 @@ number:
     initial_value: 1400
     web_server:
       sorting_group_id: grp_wiz
+      sorting_weight: 22
   - platform: template
     name: "Failsafe on/off - Polling"
     id: fs_poll_num
@@ -709,7 +711,7 @@ number:
     initial_value: 1
     web_server:
       sorting_group_id: grp_wiz
-      sorting_weight: 75
+      sorting_weight: 20
   - platform: template
     name: "Invii setPilot Wiz"
     id: wiz_sends_num
@@ -724,6 +726,7 @@ number:
     initial_value: 4
     web_server:
       sorting_group_id: grp_wiz
+      sorting_weight: 23
 
 script:
   # Cambio di una "luminosità massima": rimanda subito alle lampade i valori attuali della luce (stessa pipeline dei comandi di HA),
