@@ -31,7 +31,7 @@ text_sensor:
     name: "Versione - ble-passive"
     id: ver_ble_passive_ts
     icon: mdi:tag-outline
-    entity_category: diagnostic
+    entity_category: config
     update_interval: never
     web_server:
       sorting_group_id: grp_ver
