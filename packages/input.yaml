@@ -334,7 +334,7 @@ script:
             if (id(failsafe_mode)) { id(dim_end) = true; } else {
               const bool on = id(light_on_sensor).state;
               if (!on) {
-                id(dim_x) = 0.0f; id(dim_y) = 0.0f; id(dim_up) = true; id(dim_first) = true;
+                id(dim_x) = 0.0f; id(dim_y) = (id(dim_kmin).state < 2200.0f) ? 1.0f : 0.0f; id(dim_up) = true; id(dim_first) = true;   // da spenta parte dal minimo assoluto: arancio scuro (fine fase LED colorati) se la temperatura al minimo è < 2200 K, altrimenti 10% bianco
               } else {
                 int pct = id(lst_bri);
                 if (pct <= 0) pct = 100;
@@ -417,7 +417,7 @@ script:
                   - delay: !lambda 'return (uint32_t) id(dim_step).state;'
 
 substitutions:
-  ver_input: "4.3.9"   # versione del package (stampata nel log all'avvio)
+  ver_input: "4.3.10"   # versione del package (stampata nel log all'avvio)
 
 esphome:
   on_boot:
