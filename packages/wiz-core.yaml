@@ -220,7 +220,7 @@ web_server:
       name: "Failsafe"
       sorting_weight: 70
     - id: grp_rele
-      name: "Relè e protezioni"
+      name: "Relè"
       sorting_weight: 80
     - id: grp_misure
       name: "Misure"
