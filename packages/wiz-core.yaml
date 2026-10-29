@@ -708,7 +708,7 @@ number:
     mode: box
     optimistic: true
     restore_value: true
-    initial_value: 3
+    initial_value: 1
     web_server:
       sorting_group_id: grp_wiz
       sorting_weight: 75
