@@ -3,7 +3,7 @@
 # OBBLIGATORIO. Richiede i moduli input e timer (per ora il codice li referenzia).
 
 substitutions:
-  ver_wiz_core: "4.4.2"            # versione del package (stampata nel log all'avvio)
+  ver_wiz_core: "4.4.3"            # versione del package (stampata nel log all'avvio)
   wiz_input_id: "switch_input"
   wiz_group_name: "Luce"
   wiz_label_1: "Wiz 1"      # nome mostrato in HA per la lampada in posizione 1 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
@@ -386,6 +386,26 @@ light:
             return;
           }
           const int bri = (int) (rv.get_brightness() * 100.0f + 0.5f);
+          // riaccensione semplice da software: luce spenta e HA rimanda i valori che ricordava (l'ultima media delle Wiz, lst_*) = accensione normale,
+          // cioè i valori di accensione (100% e 2700 K di default). Valori diversi da quelli ricordati (es. "accendi al 40%") restano com'erano.
+          if (!id(light_on_sensor).state && id(lst_bri) > 0) {
+            const uint8_t cm0 = (uint8_t) rv.get_color_mode();
+            bool same = abs(bri - id(lst_bri)) <= 2;
+            if (same) {
+              if (cm0 & (uint8_t) light::ColorCapability::RGB) {
+                same = id(lst_r) >= 0 && abs((int) (rv.get_red() * 255.0f + 0.5f) - id(lst_r)) <= 6 &&
+                       abs((int) (rv.get_green() * 255.0f + 0.5f) - id(lst_g)) <= 6 && abs((int) (rv.get_blue() * 255.0f + 0.5f) - id(lst_b)) <= 6;
+              } else {
+                const float mired0 = rv.get_color_temperature();
+                const int k0 = mired0 > 0 ? (int) (1000000.0f / mired0 + 0.5f) : 0;
+                same = id(lst_kel) > 0 && abs(k0 - id(lst_kel)) <= 150;
+              }
+            }
+            if (same) {
+              id(wiz_request).execute(true, -1, 0, -1, -1, -1);
+              return;
+            }
+          }
           const uint8_t cm = (uint8_t) rv.get_color_mode();
           if (cm & (uint8_t) light::ColorCapability::RGB) {
             id(wiz_request).execute(true, bri, 0, (int) (rv.get_red() * 255.0f + 0.5f), (int) (rv.get_green() * 255.0f + 0.5f), (int) (rv.get_blue() * 255.0f + 0.5f));
