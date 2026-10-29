@@ -16,6 +16,7 @@ esphome:
   on_boot:
     - priority: 900
       then:
+        - delay: 2s   # dopo l'avvio dei componenti, altrimenti lo stato della versione resta vuoto
         - text_sensor.template.publish:
             id: ver_ble_passive_ts
             state: "${ver_ble_passive}"
