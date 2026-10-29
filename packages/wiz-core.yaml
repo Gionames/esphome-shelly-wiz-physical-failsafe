@@ -401,6 +401,8 @@ light:
                 same = id(lst_kel) > 0 && abs(k0 - id(lst_kel)) <= 150;
               }
             }
+            // dopo un riavvio la luce di HA riparte dal valore di default (100%, temperatura a metà scala = 304 mired): anche questa è un'accensione semplice
+            if (!same && !(cm0 & (uint8_t) light::ColorCapability::RGB) && bri >= 98 && fabsf(rv.get_color_temperature() - 304.3f) <= 3.0f) same = true;
             if (same) {
               id(wiz_request).execute(true, -1, 0, -1, -1, -1);
               return;
@@ -1397,23 +1399,6 @@ interval:
               id(lst_b) = s_b;
             }
           }
-          // luce spenta: tengo la luce di HA sull'ultimo colore noto delle Wiz (lst_*), anche dopo un riavvio.
-          // Così un'accensione semplice da HA si riconosce come tale e usa i valori di accensione, non il colore di default
-          bool al = false, al_rgb = false;
-          float abr = 0, am = 0, ar = 0, ag = 0, ab = 0;
-          if (!on && !id(failsafe_mode) && id(lst_bri) > 0) {
-            abr = id(lst_bri) / 100.0f;
-            const bool is_rgb = (((uint8_t) rv.get_color_mode()) & (uint8_t) light::ColorCapability::RGB) != 0;
-            if (id(lst_kel) >= 2200 && id(lst_kel) <= 6500) {
-              am = 1000000.0f / id(lst_kel);
-              al = is_rgb || fabsf(abr - rv.get_brightness()) > 0.03f || fabsf(am - rv.get_color_temperature()) > 3.0f;
-            } else if (id(lst_r) >= 0 && id(lst_g) >= 0 && id(lst_b) >= 0) {
-              al_rgb = true;
-              ar = id(lst_r) / 255.0f; ag = id(lst_g) / 255.0f; ab = id(lst_b) / 255.0f;
-              al = !is_rgb || fabsf(abr - rv.get_brightness()) > 0.03f || fabsf(ar - rv.get_red()) > 0.03f || fabsf(ag - rv.get_green()) > 0.03f || fabsf(ab - rv.get_blue()) > 0.03f;
-            }
-            if (al) change = true;
-          }
           if (!change) return;
           id(wl_sync) = true;
           auto call = lt->make_call();
@@ -1423,10 +1408,6 @@ interval:
             call.set_brightness(br);
             if (use_rgb) call.set_rgb(rr, gg, bb);
             else if (nt > 0) call.set_color_temperature(mired);
-          } else if (al) {
-            call.set_brightness(abr);
-            if (al_rgb) call.set_rgb(ar, ag, ab);
-            else call.set_color_temperature(am);
           }
           call.perform();
           id(wl_sync) = false;
