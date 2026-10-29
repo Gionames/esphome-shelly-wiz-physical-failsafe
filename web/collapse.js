@@ -1,9 +1,9 @@
 /* Pagina web del Mini: capitoli (gruppi) chiudibili e spostabili (trascinando l'intestazione), Debug Log chiudibile.
    js_url sostituisce lo script principale della pagina: lo carico io (stesso indirizzo di default) e poi aggiungo le funzioni. */
 (function () {
-  var OPEN = ['O1:', 'Power-on values', 'Long press'];
-  var ORDER = ['O1:', 'Failsafe', 'Power-on values', 'Input and button', 'Long press and dimmer', 'Relay and coil-pwm settings', 'Versions', 'Brightness limits', 'Timer', 'Configuration', 'System', 'Measurements', 'Wi-Fi', 'Diagnostic', 'Protections'];   // ordine di default dei capitoli; gruppi non elencati: in cima
-  var RENAME = { 'Configuration': 'Configuration and Bluetooth' };   // titolo dei capitoli creati in automatico da ESPHome   // capitoli aperti di default; gli altri partono chiusi
+  var OPEN = ['O1:', 'Power-on brightness values', 'Long press'];
+  var ORDER = ['O1:', 'Failsafe', 'Long press and dimmer', 'Input and button', 'Relay and coil-pwm settings', 'Versions', 'Power-on brightness values', 'Brightness limits', 'Timer', 'Bluetooth', 'System', 'Diagnostic', 'Measurements', 'Wi-Fi', 'Protections'];   // ordine di default dei capitoli; gruppi non elencati: in cima
+  var RENAME = { 'Configuration': 'Bluetooth, Restart and Factory reset' };   // titolo dei capitoli creati in automatico da ESPHome   // capitoli aperti di default; gli altri partono chiusi
   if (!window.__esphomeNoLoad) {
     var s = document.createElement('script');
     s.src = 'https://oi.esphome.io/v3/www.js';
@@ -22,7 +22,7 @@
     var p = r.querySelector('.tab-header').parentElement;
     var hs = [].slice.call(p.querySelectorAll(':scope > .tab-header'));
     var saved = [];
-    try { saved = JSON.parse(ls('esphome-order2') || '[]'); } catch (e) {}
+    try { saved = JSON.parse(ls('esphome-order3') || '[]'); } catch (e) {}
     var titles = hs.map(function (h) { return h.textContent.trim(); });
     var list = saved.filter(function (t) { return titles.indexOf(t) >= 0; });
     function rank(t) { for (var i = 0; i < ORDER.length; i++) if (t.indexOf(ORDER[i]) === 0) return i; return -1; }
@@ -98,7 +98,7 @@
       var ia = list.indexOf(a), ib = list.indexOf(b);
       list.splice(ia, 1);
       list.splice(ib, 0, a);   // il gruppo trascinato prende il posto di quello su cui lo lascio
-      ls('esphome-order2', JSON.stringify(list));
+      ls('esphome-order3', JSON.stringify(list));
       order(r);
     });
     r.addEventListener('dragend', function () {
