@@ -20,7 +20,7 @@
   }
   function setup(r) {
     var st = document.createElement('style');
-    st.textContent = '.tab-header{cursor:pointer;user-select:none}' +
+    st.textContent = '.tab-header{display:flex!important;width:100%;box-sizing:border-box;align-items:center;margin:8px 0 2px;padding:9px 12px;font-weight:600;border-radius:6px;background:rgba(127,127,127,.18);cursor:pointer;user-select:none}.tab-header:hover{background:rgba(127,127,127,.3)}' +
       '.tab-header::before{content:"\\25BE  "}' +
       '.tab-header[data-c="1"]::before{content:"\\25B8  "}' +
       '.tab-header[data-c="1"]+.tab-container{display:none}';
