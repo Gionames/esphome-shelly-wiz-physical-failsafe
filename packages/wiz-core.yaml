@@ -3,7 +3,7 @@
 # OBBLIGATORIO. Richiede i moduli input e timer (per ora il codice li referenzia).
 
 substitutions:
-  ver_wiz_core: "4.4.3"            # versione del package (stampata nel log all'avvio)
+  ver_wiz_core: "4.4.4"            # versione del package (stampata nel log all'avvio)
   wiz_input_id: "switch_input"
   wiz_group_name: "Luce"
   wiz_label_1: "Wiz 1"      # nome mostrato in HA per la lampada in posizione 1 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
@@ -706,7 +706,7 @@ number:
     mode: box
     optimistic: true
     restore_value: true
-    initial_value: 1
+    initial_value: 3
     web_server:
       sorting_group_id: grp_wiz
       sorting_weight: 75
@@ -1397,6 +1397,23 @@ interval:
               id(lst_b) = s_b;
             }
           }
+          // luce spenta: tengo la luce di HA sull'ultimo colore noto delle Wiz (lst_*), anche dopo un riavvio.
+          // Così un'accensione semplice da HA si riconosce come tale e usa i valori di accensione, non il colore di default
+          bool al = false, al_rgb = false;
+          float abr = 0, am = 0, ar = 0, ag = 0, ab = 0;
+          if (!on && !id(failsafe_mode) && id(lst_bri) > 0) {
+            abr = id(lst_bri) / 100.0f;
+            const bool is_rgb = (((uint8_t) rv.get_color_mode()) & (uint8_t) light::ColorCapability::RGB) != 0;
+            if (id(lst_kel) >= 2200 && id(lst_kel) <= 6500) {
+              am = 1000000.0f / id(lst_kel);
+              al = is_rgb || fabsf(abr - rv.get_brightness()) > 0.03f || fabsf(am - rv.get_color_temperature()) > 3.0f;
+            } else if (id(lst_r) >= 0 && id(lst_g) >= 0 && id(lst_b) >= 0) {
+              al_rgb = true;
+              ar = id(lst_r) / 255.0f; ag = id(lst_g) / 255.0f; ab = id(lst_b) / 255.0f;
+              al = !is_rgb || fabsf(abr - rv.get_brightness()) > 0.03f || fabsf(ar - rv.get_red()) > 0.03f || fabsf(ag - rv.get_green()) > 0.03f || fabsf(ab - rv.get_blue()) > 0.03f;
+            }
+            if (al) change = true;
+          }
           if (!change) return;
           id(wl_sync) = true;
           auto call = lt->make_call();
@@ -1406,6 +1423,10 @@ interval:
             call.set_brightness(br);
             if (use_rgb) call.set_rgb(rr, gg, bb);
             else if (nt > 0) call.set_color_temperature(mired);
+          } else if (al) {
+            call.set_brightness(abr);
+            if (al_rgb) call.set_rgb(ar, ag, ab);
+            else call.set_color_temperature(am);
           }
           call.perform();
           id(wl_sync) = false;
