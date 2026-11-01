@@ -9,6 +9,11 @@ a rebuild that only bumps the version string is easy to tell apart from a real c
 
 ---
 
+## [1.0.7] - 2026-11-01
+
+- Gli zip di conversione e i bin UART tornano compilati con ESPHome 2026.8.2 (ESP-IDF 5.5.5), la stessa toolchain di automatous 1.5.2: bootloader identico byte per byte. Con la 2026.10.1 (1.0.5 e 1.0.6) il bootloader cambiava (ESP-IDF 5.5.6) e non era provato su una conversione. Dopo la conversione ci si aggiorna a un ESPHome più recente dal Builder o in OTA.
+- Le 1.0.5 e 1.0.6 restano pubblicate ma non vanno usate per convertire uno Shelly da ShellyOS.
+
 ## [1.0.6] - 2026-11-01
 
 - Sensore "Versione ESPHome" sulla pagina web del dispositivo (disattivato di default in Home Assistant, dove la versione è già nel device info).
