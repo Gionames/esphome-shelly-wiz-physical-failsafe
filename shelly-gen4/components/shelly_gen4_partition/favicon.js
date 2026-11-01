@@ -9,7 +9,6 @@
 
   // the project version is filled in at build time (placeholder replaced by the component)
   var suffix = " \u00b7 v" + "__VERSION__";
-  var base = document.title;
   function each(root, fn) {
     root.querySelectorAll("*").forEach(function (e) {
       fn(e);
@@ -17,6 +16,9 @@
     });
   }
   function apply() {
+    // the page sets its title after loading: do nothing until there is one
+    var base = document.title.split(suffix).join("").trim();
+    if (!base) return;
     if (document.title.indexOf(suffix) < 0) document.title = base + suffix;
     // the visible heading is rebuilt by the page when it receives the title, so keep checking
     each(document, function (e) {
