@@ -9,11 +9,17 @@
 #   relay_id, relay_pin, relay_name, relay_mode_id, relay_mode_name, pulse_id, pulse_name
 #   input_id, input_pin, input_name
 #
-# Punti di aggancio per chi comanda altro che il relè (es. luci Wiz), da sostituire con !replace:
-#   script input_action${n}          (param act: 0 commuta, 1 accendi, 2 spegni) - default: comanda il relè
-#   script input_longpress_hook${n}  - eseguito alla pressione lunga per le opzioni oltre "Evento"
-#   script sim_hold${n}              - durata della pressione lunga simulata
-# Substitution input_fast_expr: espressione C++ vera = comando subito alla pressione anche con "Al rilascio".
+# Punti di aggancio per chi comanda altro che il relè (es. luci Wiz). ESPHome non sa sostituire una lista:
+# si aggiunge con !extend (le liste si accodano) e si spegne il comportamento di base con un interruttore.
+#   global input_to_relay${n}        true = l'ingresso comanda il relè (default); chi comanda altro lo porta a false
+#                                    con !extend (initial_value) e aggiunge la sua azione a input_action${n}
+#   script input_action${n}          (param act: 0 commuta, 1 accendi, 2 spegni): di base comanda il relè
+#   script input_longpress_hook${n}  eseguito alla soglia della pressione lunga per le opzioni oltre "Evento"
+#                                    (indice 2 e oltre di longpress_select${n}, che si accodano con !extend);
+#                                    viene fermato al rilascio del tasto
+#   binary_sensor input_fast${n}     (interno) se vero, con "Al rilascio" il comando parte comunque subito;
+#                                    di base falso, si sostituisce con !extend della sua lambda
+# sim_hold${n} tiene il tasto simulato premuto finché input_longpress_hook${n} sta girando (max 30 s).
 #
 # Test: l'ordine dei fronti e il comportamento delle 5 modalità vanno provati su un device reale.
 #
@@ -21,7 +27,6 @@
 substitutions:
   input_mode: "Interruttore: ogni cambio di posizione commuta l'uscita (Flip)" # modalità iniziale
   input_debounce_ms: "50" # antirimbalzo iniziale, ms
-  input_fast_expr: "false"
 
 # ---------------------------------------------------------------- relè
 switch:
@@ -77,28 +82,38 @@ script:
           return 500;
       - switch.turn_off: ${relay_id}
 
-  # azione richiesta dall'ingresso: di default comanda il relè
+  # azione richiesta dall'ingresso: di default comanda il relè; chi comanda altro accoda la sua azione (!extend)
   - id: input_action${n}
     parameters:
       act: int
     then:
-      - lambda: |-
-          if (act == 1) id(${relay_id}).turn_on();
-          else if (act == 2) id(${relay_id}).turn_off();
-          else id(${relay_id}).toggle();
+      - if:
+          condition:
+            lambda: 'return id(input_to_relay${n});'
+          then:
+            - lambda: |-
+                if (act == 1) id(${relay_id}).turn_on();
+                else if (act == 2) id(${relay_id}).turn_off();
+                else id(${relay_id}).toggle();
 
-  # pressione lunga oltre "Evento a Home Assistant": vuoto, lo riempie chi aggiunge opzioni
+  # pressione lunga oltre "Evento a Home Assistant": vuoto, chi aggiunge opzioni vi accoda le sue azioni (!extend)
   - id: input_longpress_hook${n}
     mode: restart
     then:
       - delay: 0ms
 
-  # simula il tasto tenuto premuto: lo rilascia subito dopo la soglia
+  # simula il tasto tenuto premuto: lo rilascia subito dopo la soglia, a meno che l'azione della pressione lunga
+  # (input_longpress_hook, per esempio una rampa) stia ancora girando: allora aspetta che finisca (limite 30 s)
   - id: sim_hold${n}
     mode: single
     then:
       - lambda: 'id(sim_press${n}) = true;'
       - delay: !lambda 'return (uint32_t) (id(lp_threshold${n}).state * 1000.0f) + 300;'
+      - wait_until:
+          condition:
+            not:
+              script.is_running: input_longpress_hook${n}
+          timeout: 30s
       - lambda: 'id(sim_press${n}) = false;'
 
   # pressione lunga (solo modalità a pulsante): scatta alla soglia, senza aspettare il rilascio
@@ -230,6 +245,9 @@ event:
       - pressione_lunga
 
 globals:
+  - id: input_to_relay${n} # l'ingresso comanda il relè (vedi punti di aggancio in testa)
+    type: bool
+    initial_value: "true"
   - id: sw_last${n}        # ultimo livello logico dell'ingresso: -1 = non ancora letto
     type: int
     initial_value: "-1"
@@ -255,6 +273,12 @@ binary_sensor:
     pin: ${input_pin}
     filters:
       - delayed_on_off: !lambda 'return (uint32_t) id(input_debounce${n}).state;'
+
+  # vero = con "Al rilascio" il comando parte subito (es. failsafe Wiz); di base falso, la lambda si sostituisce con !extend
+  - platform: template
+    id: input_fast${n}
+    internal: true
+    lambda: 'return false;'
 
   # livello logico: ingresso (con antirimbalzo) invertito se richiesto, oppure tasto simulato.
   # Un solo punto per modalità, blocco, pressione lunga; i due fronti arrivano sempre qui.
@@ -286,8 +310,8 @@ binary_sensor:
                 id(lp_done${n}) = false;
                 id(press_pending${n}) = false;
                 if (lp != 0) id(longpress_wait${n}).execute();
-                // "al rilascio": il comando parte al rilascio, salvo dove serve subito (input_fast_expr)
-                if (on_rel && !(${input_fast_expr}) && act >= 0) { id(press_pending${n}) = true; id(press_act${n}) = act; return; }
+                // "al rilascio": il comando parte al rilascio, salvo dove serve subito (input_fast)
+                if (on_rel && !id(input_fast${n}).state && act >= 0) { id(press_pending${n}) = true; id(press_act${n}) = act; return; }
               } else {
                 id(longpress_wait${n}).stop();
                 id(input_longpress_hook${n}).stop();
