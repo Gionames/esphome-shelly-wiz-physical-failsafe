@@ -1,0 +1,301 @@
+#
+# Relè + ingresso di un canale Shelly Gen4, in un solo posto.
+# Derivato da automatous-io/shelly-gen4-esphome v1.5.2 (Apache-2.0): relè Latch/Momentary e
+# impulso come nell'originale; "Relay Linking" sostituito da "Modalità Input" (Detached = Unlinked).
+#
+# Si include una volta per canale, con vars:
+#   n            suffisso degli id d'appoggio: "" (canale unico o canale 1), "_2" (canale 2)
+#   label        suffisso dei nomi: "" oppure " 1" / " 2"
+#   relay_id, relay_pin, relay_name, relay_mode_id, relay_mode_name, pulse_id, pulse_name
+#   input_id, input_pin, input_name
+#
+# Punti di aggancio per chi comanda altro che il relè (es. luci Wiz), da sostituire con !replace:
+#   script input_action${n}          (param act: 0 commuta, 1 accendi, 2 spegni) - default: comanda il relè
+#   script input_longpress_hook${n}  - eseguito alla pressione lunga per le opzioni oltre "Evento"
+#   script sim_hold${n}              - durata della pressione lunga simulata
+# Substitution input_fast_expr: espressione C++ vera = comando subito alla pressione anche con "Al rilascio".
+#
+# Test: l'ordine dei fronti e il comportamento delle 5 modalità vanno provati su un device reale.
+#
+
+substitutions:
+  input_mode: "Interruttore: ogni cambio di posizione commuta l'uscita (Flip)" # modalità iniziale
+  input_debounce_ms: "50" # antirimbalzo iniziale, ms
+  input_fast_expr: "false"
+
+# ---------------------------------------------------------------- relè
+switch:
+  - platform: gpio
+    name: "${relay_name}"
+    id: ${relay_id}
+    pin: ${relay_pin}
+    restore_mode: ${relay_restore}
+    # in Momentary il relè si riapre da solo dopo l'impulso; il modello aggiunge i suoi controlli di guasto con !extend
+    on_turn_on:
+      - if:
+          condition:
+            lambda: 'return id(${relay_mode_id}).current_option() == "Momentary";'
+          then:
+            - script.execute: ${relay_id}_pulse_off
+    on_turn_off:
+      - script.stop: ${relay_id}_pulse_off
+
+  # blocca l'ingresso fisico (non il comando da Home Assistant)
+  - platform: template
+    name: "Blocca ingresso${label}"
+    id: input_lock${n}
+    icon: mdi:lock
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+  # il cambio di inversione cambia il livello logico: quel cambio non deve commutare l'uscita
+  - platform: template
+    name: "Inverti ingresso${label}"
+    id: input_invert${n}
+    icon: mdi:swap-vertical
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    turn_on_action:
+      - lambda: 'id(sw_last${n}) = -1;'
+    turn_off_action:
+      - lambda: 'id(sw_last${n}) = -1;'
+
+script:
+  # restart: ogni impulso ha la sua durata piena; spegnere il relè cancella l'impulso pendente
+  - id: ${relay_id}_pulse_off
+    mode: restart
+    then:
+      - delay: !lambda |-
+          auto s = id(${pulse_id}).current_option();
+          if (s == "100 ms") return 100;
+          if (s == "250 ms") return 250;
+          if (s == "500 ms") return 500;
+          if (s == "1 s") return 1000;
+          if (s == "2 s") return 2000;
+          if (s == "5 s") return 5000;
+          return 500;
+      - switch.turn_off: ${relay_id}
+
+  # azione richiesta dall'ingresso: di default comanda il relè
+  - id: input_action${n}
+    parameters:
+      act: int
+    then:
+      - lambda: |-
+          if (act == 1) id(${relay_id}).turn_on();
+          else if (act == 2) id(${relay_id}).turn_off();
+          else id(${relay_id}).toggle();
+
+  # pressione lunga oltre "Evento a Home Assistant": vuoto, lo riempie chi aggiunge opzioni
+  - id: input_longpress_hook${n}
+    mode: restart
+    then:
+      - delay: 0ms
+
+  # simula il tasto tenuto premuto: lo rilascia subito dopo la soglia
+  - id: sim_hold${n}
+    mode: single
+    then:
+      - lambda: 'id(sim_press${n}) = true;'
+      - delay: !lambda 'return (uint32_t) (id(lp_threshold${n}).state * 1000.0f) + 300;'
+      - lambda: 'id(sim_press${n}) = false;'
+
+  # pressione lunga (solo modalità a pulsante): scatta alla soglia, senza aspettare il rilascio
+  - id: longpress_wait${n}
+    mode: restart
+    then:
+      - delay: !lambda 'return (uint32_t) (id(lp_threshold${n}).state * 1000);'
+      - lambda: |-
+          if (id(sw_last${n}) != 1) return;
+          id(lp_done${n}) = true;
+          id(press_pending${n}) = false;
+          const int lp = id(longpress_select${n}).active_index().value_or(0);
+          if (lp == 1) id(input_event${n}).trigger("pressione_lunga");
+          else if (lp >= 2) id(input_longpress_hook${n}).execute();
+
+# ---------------------------------------------------------------- selezioni
+select:
+  - platform: template
+    name: "${relay_mode_name}"
+    id: ${relay_mode_id}
+    optimistic: true
+    options:
+      - Latch
+      - Momentary
+    initial_option: ${relay_mode}
+    restore_value: true
+  - platform: template
+    name: "${pulse_name}"
+    id: ${pulse_id}
+    optimistic: true
+    options:
+      - "100 ms"
+      - "250 ms"
+      - "500 ms"
+      - "1 s"
+      - "2 s"
+      - "5 s"
+    initial_option: ${relay_pulse}
+    restore_value: true
+
+  - platform: template
+    name: "Modalità Input${label}"
+    id: input_mode_select${n}
+    icon: mdi:light-switch
+    entity_category: config
+    optimistic: true
+    options:
+      - "Interruttore: ogni cambio di posizione commuta l'uscita (Flip)"
+      - "Pulsante: ogni pressione commuta l'uscita (Momentary)"
+      - "Interruttore: l'uscita segue la posizione del tasto (Follow)"
+      - "Pulsante: ogni pressione accende, non spegne (Activate)"
+      - "Scollegato: l'ingresso non comanda nulla (Detached)"
+    initial_option: "${input_mode}"
+    restore_value: true
+  - platform: template
+    name: "Comando del pulsante${label}"
+    id: cmd_timing_select${n}
+    icon: mdi:gesture-tap-button
+    entity_category: config
+    optimistic: true
+    options:
+      - "Alla pressione: subito, ma a uscita attiva la pressione lunga la spegne prima"
+      - "Al rilascio: aggiunge la durata del tocco, nessun lampeggio"
+    initial_option: "Alla pressione: subito, ma a uscita attiva la pressione lunga la spegne prima"
+    restore_value: true
+  - platform: template
+    name: "Pressione lunga${label}"
+    id: longpress_select${n}
+    icon: mdi:gesture-tap-hold
+    entity_category: config
+    optimistic: true
+    options:
+      - "Nessuna azione"
+      - "Manda l'evento a Home Assistant"
+    initial_option: "Nessuna azione"
+    restore_value: true
+
+number:
+  - platform: template
+    name: "Pressione lunga: durata${label}"
+    id: lp_threshold${n}
+    icon: mdi:timer-outline
+    entity_category: config
+    unit_of_measurement: "s"
+    min_value: 0.4
+    max_value: 3
+    step: 0.1
+    mode: box
+    optimistic: true
+    restore_value: true
+    initial_value: 0.4
+  - platform: template
+    name: "Antirimbalzo ingresso${label}"
+    id: input_debounce${n}
+    icon: mdi:timer-sand
+    entity_category: config
+    unit_of_measurement: "ms"
+    min_value: 10
+    max_value: 500
+    step: 10
+    mode: box
+    optimistic: true
+    restore_value: true
+    initial_value: ${input_debounce_ms}
+
+button:
+  - platform: template
+    name: "Simula pressione lunga${label}"
+    id: sim_btn${n}
+    icon: mdi:gesture-tap-hold
+    entity_category: config
+    on_press:
+      # secondo tocco mentre sta "premendo": rilascia subito
+      - if:
+          condition:
+            script.is_running: sim_hold${n}
+          then:
+            - script.stop: sim_hold${n}
+            - lambda: 'id(sim_press${n}) = false;'
+          else:
+            - script.execute: sim_hold${n}
+
+event:
+  - platform: template
+    name: "Ingresso${label}"
+    id: input_event${n}
+    device_class: button
+    event_types:
+      - pressione_lunga
+
+globals:
+  - id: sw_last${n}        # ultimo livello logico dell'ingresso: -1 = non ancora letto
+    type: int
+    initial_value: "-1"
+  - id: sim_press${n}      # tasto simulato premuto
+    type: bool
+    initial_value: "false"
+  - id: press_pending${n}  # "al rilascio": comando in attesa del rilascio
+    type: bool
+    initial_value: "false"
+  - id: press_act${n}      # azione in attesa
+    type: int
+    initial_value: "0"
+  - id: lp_done${n}        # la pressione lunga ha già agito
+    type: bool
+    initial_value: "false"
+
+# ---------------------------------------------------------------- ingresso
+binary_sensor:
+  # morsetto dell'ingresso, con antirimbalzo regolabile; resta sempre visibile in Home Assistant
+  - platform: gpio
+    name: "${input_name}"
+    id: ${input_id}
+    pin: ${input_pin}
+    filters:
+      - delayed_on_off: !lambda 'return (uint32_t) id(input_debounce${n}).state;'
+
+  # livello logico: ingresso (con antirimbalzo) invertito se richiesto, oppure tasto simulato.
+  # Un solo punto per modalità, blocco, pressione lunga; i due fronti arrivano sempre qui.
+  - platform: template
+    id: input_logic${n}
+    internal: true
+    lambda: |-
+      if (!id(${input_id}).has_state()) return {};
+      return (id(${input_id}).state != id(input_invert${n}).state) || id(sim_press${n});
+    on_state:
+      then:
+        - lambda: |-
+            bool first = id(sw_last${n}) < 0;
+            id(sw_last${n}) = x ? 1 : 0;
+            if (first) return;                                              // lettura iniziale o cambio di inversione: nessuna azione
+            if (id(input_lock${n}).state) { id(press_pending${n}) = false; return; }
+            // indice della modalità: 0 Flip, 1 Momentary, 2 Follow, 3 Activate, 4 Detached
+            const int m = id(input_mode_select${n}).active_index().value_or(0);
+            const bool push = (m == 1 || m == 3);                           // modalità a pulsante
+            const bool on_rel = push && id(cmd_timing_select${n}).active_index().value_or(0) == 1;
+            const int lp = id(longpress_select${n}).active_index().value_or(0);   // 0 nessuna, 1 evento, 2 e oltre: opzioni aggiunte
+            int act = -1;                                                   // 0 commuta, 1 accendi, 2 spegni
+            if (m == 0) act = 0;
+            else if (m == 1) { if (x) act = 0; }
+            else if (m == 2) act = x ? 1 : 2;
+            else if (m == 3) { if (x) act = 1; }
+            if (push) {
+              if (x) {
+                id(lp_done${n}) = false;
+                id(press_pending${n}) = false;
+                if (lp != 0) id(longpress_wait${n}).execute();
+                // "al rilascio": il comando parte al rilascio, salvo dove serve subito (input_fast_expr)
+                if (on_rel && !(${input_fast_expr}) && act >= 0) { id(press_pending${n}) = true; id(press_act${n}) = act; return; }
+              } else {
+                id(longpress_wait${n}).stop();
+                id(input_longpress_hook${n}).stop();
+                if (!id(press_pending${n})) return;
+                id(press_pending${n}) = false;
+                if (id(lp_done${n})) return;                                // la pressione lunga ha già agito
+                act = id(press_act${n});
+              }
+            }
+            if (act < 0) return;
+            id(input_action${n}).execute(act);
