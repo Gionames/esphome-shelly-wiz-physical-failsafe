@@ -26,7 +26,7 @@ esphome:
   name_add_mac_suffix: true
   project:
     name: gionames.${device_name}
-    version: "1.0.5"
+    version: "1.0.6"
 
 esp32:
   board: esp32-c6-devkitm-1
@@ -127,6 +127,13 @@ text_sensor:
     entity_category: diagnostic
     lambda: 'return {ESPHOME_PROJECT_VERSION};'
     update_interval: 10s
+  # ESPHome version on the device page; off by default in Home Assistant, whose device info already shows it
+  - platform: version
+    id: esphome_version
+    name: "Versione ESPHome"
+    entity_category: diagnostic
+    disabled_by_default: true
+    hide_timestamp: true
 
 sensor:
   - platform: internal_temperature
