@@ -1,0 +1,149 @@
+#
+# Copyright 2026 AUTOMATOUS.IO
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Shared base for every Shelly Gen4 (ESP-Shelly-C68F (ESP32-C6), 8MB flash).
+#
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+  # unique name per device out of the box; adoption stubs set their own name and disable this
+  name_add_mac_suffix: true
+  project:
+    name: automatous-io.${device_name}
+    version: "1.5.2"
+
+esp32:
+  board: esp32-c6-devkitm-1
+  flash_size: 8MB
+  framework:
+    type: esp-idf
+    version: recommended
+    sdkconfig_options:
+      # stock Shelly keeps the partition table at 0x10000, not IDF's default 0x8000.
+      # without this the firmware installs but cannot find its partitions at boot.
+      # see docs/PARTITIONS.md
+      CONFIG_PARTITION_TABLE_OFFSET: "0x10000"
+
+# fallback hotspot + captive portal for first boot and whenever Wi-Fi is unreachable
+wifi:
+  ap:
+    password: "${ap_password}"
+  # the Bluetooth scan only runs while Wi-Fi is connected. a continuous scan starves the
+  # hotspot, and joining it fails as if the password were wrong
+  on_connect:
+    - if:
+        condition:
+          switch.is_on: bluetooth_proxy_switch
+        then:
+          - esp32_ble_tracker.start_scan:
+              continuous: true
+  on_disconnect:
+    - esp32_ble_tracker.stop_scan:
+
+captive_portal:
+
+logger:
+  level: ${log_level}
+  hardware_uart: UART0
+
+# native Home Assistant API; adoption adds the encryption key in the user's stub
+api:
+
+# updates write only the app image to the inactive app slot; the bootloader and
+# partition table are never rewritten after conversion
+ota:
+  platform: esphome
+
+# local device page: entities, logs, and OTA upload at http://<device>.local
+web_server:
+  port: 80
+  version: 2
+
+# Bluetooth proxy for Home Assistant; active allows connections, not just advertisements
+esp32_ble_tracker:
+  id: ble_tracker
+  scan_parameters:
+    active: true
+    continuous: false
+
+bluetooth_proxy:
+  active: true
+
+# turns the Bluetooth radio off at runtime. to drop the proxy entirely, !remove both
+# components above, this switch (- id: !remove bluetooth_proxy_switch), and wifi's
+# on_connect and on_disconnect
+switch:
+  - platform: template
+    name: "Bluetooth Proxy"
+    id: bluetooth_proxy_switch
+    icon: mdi:bluetooth
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    # the scan must be fully stopped before the radio goes down, or the scanner is left
+    # stuck mid-stop and never restarts after ble.enable
+    turn_on_action:
+      - ble.enable:
+      - wait_until:
+          condition: ble.enabled
+          timeout: 5s
+      - delay: 100ms
+      - if:
+          condition: wifi.connected
+          then:
+            - esp32_ble_tracker.start_scan:
+                continuous: true
+    turn_off_action:
+      - esp32_ble_tracker.stop_scan:
+      - wait_until:
+          condition:
+            lambda: 'return id(ble_tracker)->get_scanner_state() == esp32_ble_tracker::ScannerState::IDLE;'
+          timeout: 2s
+      - ble.disable:
+
+# free memory sensors below; the proxy is the largest memory user
+debug:
+
+sensor:
+  - platform: internal_temperature
+    name: "Internal Temperature"
+    id: sensor_internal_temperature
+  - platform: debug
+    id: sensor_debug
+    free:
+      name: "Free Memory"
+      entity_category: diagnostic
+    block:
+      name: "Largest Free Memory Block"
+      entity_category: diagnostic
+
+button:
+  - platform: restart
+    name: "Restart"
+    id: btn_restart
+  - platform: factory_reset
+    name: "Factory Reset"
+    id: btn_factory_reset
+
+# ships the stock partition table to every build, including adopted/remote builds
+# that have nothing but this repo's URL. removing this breaks every adopted device's
+# next rebuild. see docs/PARTITIONS.md
+external_components:
+  - source: github://automatous-io/shelly-gen4-esphome@main
+    components: [shelly_gen4_partition]
+    refresh: 1d
+
+shelly_gen4_partition:
