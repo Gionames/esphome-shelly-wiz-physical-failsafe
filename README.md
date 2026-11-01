@@ -74,18 +74,25 @@ Pin packages to a tag (`@v3.3.0`), never `@main`. Running firmware is not affect
 - v1.1.0: on-colour fields next to each other, readable PWM help.
 - v1.0.0: first release.
 
-## Moduli (ramo `modularizzazione`, v4.2.0 sperimentale)
+## Moduli (ramo `modularizzazione-per-sperimentazione`, v5.0.0 sperimentale)
 
-`packages/wiz-physical-failsafe.yaml` (monolitico, fino a v3.8.0) è stato diviso in moduli con comportamento identico (verificato: la configurazione risolta da `esphome config` coincide). Si includono con `files:`:
+Questo ramo è la `modularizzazione` riallineata alla base del ramo `sperimentale` (`shelly-gen4/configs/shelly-relay-input.yaml`: relè, Relay Mode, impulso e ingresso in un solo posto, con Modalità Input, blocco, inversione, antirimbalzo, pressione lunga, simulazione ed evento). I moduli qui sono **componenti aggiuntivi** per le Wiz: stesse funzioni del ramo `modularizzazione`, ma l'ingresso e il relè sono quelli della base, non più un "Switch Input" specchiato con Relay Linking = Unlinked.
+
+Il YAML del dispositivo include la base (`shelly-2pm-gen4.yaml`, `shelly-1pm-mini-gen4.yaml`, ...) del ramo `sperimentale` e, **dopo**, i moduli:
 
 ```yaml
 packages:
+  base:
+    url: https://github.com/Gionames/esphome-shelly-wiz-physical-failsafe
+    ref: sperimentale
+    files: [shelly-gen4/configs/shelly-2pm-gen4.yaml]
   wiz:
     url: https://github.com/Gionames/esphome-shelly-wiz-physical-failsafe
-    ref: modularizzazione
+    ref: modularizzazione-per-sperimentazione
     files:
+      - packages/versions.yaml
       - packages/wiz-core.yaml            # obbligatorio: comandi Wiz, failsafe (su comando e proattivo), entità di stato del failsafe
-      - packages/input.yaml               # obbligatorio per ora (da rendere generico)
+      - packages/input.yaml               # aggancia l'ingresso della base alle Wiz: azione, pressione lunga (alternativi, dimmer)
       - packages/timer.yaml               # obbligatorio per ora (da rendere generico)
       - packages/wiz-diagnostics.yaml     # opzionale
       - packages/wifi-settings.yaml       # opzionale
@@ -93,4 +100,6 @@ packages:
       - packages/coil-pwm.yaml            # opzionale
 ```
 
-Verificate con `esphome config`: core+input+timer; più diagnostics. (Le entità di stato del failsafe sono ora dentro il core.) Input e timer sono ancora referenziati dal codice del core: renderli opzionali richiede degli "hook" (prossimo passo). **Non provato su hardware.**
+Ordine: i moduli vanno dopo la base (le substitution dei package successivi prevalgono). Punti di aggancio della base usati da `input.yaml`: `input_action` e `input_longpress_hook` (le azioni si accodano con `!extend`), `input_to_relay` (a false: l'ingresso non comanda il relè), `input_fast` (in failsafe il comando "al rilascio" resta immediato). Cambiano rispetto a `modularizzazione`: sparisce lo specchio `switch_input_mirror` e il Relay Linking; le opzioni della pressione lunga sono Nessuna azione, Evento a Home Assistant, Valori alternativi, Dimmer (indici 0-3); le entità generiche perdono il prefisso "Wiz - " e, su 2PM, il canale 1 ha il suffisso " 1". Il monolite `wiz-physical-failsafe.yaml` è rimosso.
+
+Verificato con `esphome config` (base 2PM + moduli). **Non provato su hardware.**
