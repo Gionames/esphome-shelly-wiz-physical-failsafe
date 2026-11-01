@@ -26,7 +26,7 @@ esphome:
   name_add_mac_suffix: true
   project:
     name: gionames.${device_name}
-    version: "1.0.0"
+    version: "1.0.1"
 
 esp32:
   board: esp32-c6-devkitm-1
@@ -118,6 +118,15 @@ switch:
 
 # free memory sensors below; the proxy is the largest memory user
 debug:
+
+# firmware version on the device page and in Home Assistant (the project version above)
+text_sensor:
+  - platform: template
+    id: fw_version
+    name: "Versione firmware"
+    entity_category: diagnostic
+    lambda: 'return {ESPHOME_PROJECT_VERSION};'
+    update_interval: 10s
 
 sensor:
   - platform: internal_temperature

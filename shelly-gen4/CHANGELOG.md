@@ -9,6 +9,10 @@ a rebuild that only bumps the version string is easy to tell apart from a real c
 
 ---
 
+## [1.0.1] - 2026-11-01
+
+- Aggiunto il sensore di testo "Versione firmware" (versione del progetto) sulla pagina web del dispositivo e in Home Assistant.
+
 ## [1.0.0] - 2026-11-01
 
 Prima versione indipendente (derivata da shelly-gen4-esphome v1.5.2, Apache-2.0, vedi NOTICE).
