@@ -1,10 +1,9 @@
-# wiz-core.yaml (v4.3.5) - modulo unico: comandi Wiz UDP, quorum, failsafe sul relè (su comando e proattivo),
+# wiz-core.yaml (v5.0.0) - modulo unico: comandi Wiz UDP, quorum, failsafe sul relè (su comando e proattivo),
 # luce nativa per HA, accensione, numeri di regolazione, entità di stato del failsafe.
-# OBBLIGATORIO. Richiede i moduli input e timer (per ora il codice li referenzia).
+# OBBLIGATORIO. Richiede la base "sperimentale" (shelly-relay-input.yaml, che definisce ingresso e relè) e i moduli input e timer.
 
 substitutions:
-  ver_wiz_core: "4.4.4"            # versione del package (stampata nel log all'avvio)
-  wiz_input_id: "switch_input"
+  ver_wiz_core: "5.0.0"            # versione del package (stampata nel log all'avvio)
   wiz_group_name: "Luce"
   wiz_label_1: "Wiz 1"      # nome mostrato in HA per la lampada in posizione 1 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
   wiz_label_2: "Wiz 2"      # nome mostrato in HA per la lampada in posizione 2 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
@@ -30,9 +29,6 @@ globals:
   - id: boot_done
     type: bool
     initial_value: "false"
-  - id: sw_last            # -1 = non ancora letto
-    type: int
-    initial_value: "-1"
   - id: want_on            # stato che l'azione corrente vuole ottenere
     type: bool
     initial_value: "false"
@@ -135,15 +131,6 @@ globals:
     type: uint32_t
     restore_value: true
     initial_value: "0"
-  - id: press_pending     # modalità "al rilascio": c'è una pressione in attesa del rilascio
-    type: bool
-    initial_value: "false"
-  - id: press_act         # azione memorizzata alla pressione (0 commuta, 1 accendi)
-    type: int
-    initial_value: "0"
-  - id: lp_done           # la pressione lunga è già scattata
-    type: bool
-    initial_value: "false"
   - id: alt_req           # prossimo comando di accensione con i valori alternativi
     type: bool
     initial_value: "false"
@@ -1278,19 +1265,16 @@ interval:
                   id(wiz_lit)[i] = st;
                   id(wiz_known)[i] = true;
                 }
-  # primo secondo dopo l'avvio: forza Relay Linking = Unlinked e legge lo stato iniziale
+  # primo secondo dopo l'avvio: legge lo stato iniziale (l'ingresso non comanda il relè: lo fa input_action, sostituita da input.yaml)
   - interval: 1s
     then:
       - if:
           condition:
             lambda: 'return !id(boot_done);'
           then:
-            - select.set:
-                id: relay_linking_select
-                option: "Unlinked"
             - lambda: |-
                 id(boot_done) = true;
-                id(sw_last) = id(switch_input_mirror).state ? 1 : 0;
+                id(sw_last) = id(input_logic).state ? 1 : 0;
                 // relè aperto all'avvio: non so in che stato sono le Wiz, si parte in failsafe
                 if (!id(relay_1).state) id(failsafe_mode) = true;
             # relè chiuso: leggo subito lo stato delle lampade (sola lettura, non cambia nulla)
