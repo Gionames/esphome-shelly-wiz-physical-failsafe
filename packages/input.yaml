@@ -1,5 +1,5 @@
-# input.yaml (v5.0.0) - add-on Wiz per l'ingresso fisico. Richiede la base "sperimentale" (shelly-relay-input.yaml: modalità,
-# blocco, inversione, pressione lunga, simulazione, evento) e wiz-core. Qui restano solo le funzioni Wiz:
+# input.yaml (v5.0.0) - add-on Wiz per l'ingresso fisico. Richiede la base SECF >= 1.0.11 (shelly-relay-input.yaml: modalità,
+# blocco, inversione, pressione lunga, evento) e wiz-core. Qui restano solo le funzioni Wiz:
 #  - l'azione dell'ingresso (input_action) comanda le Wiz tramite sw_changed invece del relè;
 #  - pressione lunga: opzioni in più "valori alternativi" e "dimmer" (la base ha "Nessuna azione" e "Evento a Home Assistant");
 #  - dimmer continuo con i suoi numeri di regolazione;
@@ -8,7 +8,7 @@
 # Gli id del canale 1 (n = "") della base coincidono con quelli del ramo modularizzazione.
 
 substitutions:
-  ver_input: "5.0.0"                      # versione del package (stampata nel log all'avvio)
+  ver_input: "5.1.0"                      # versione del package (stampata nel log all'avvio)
 
 # le entità della base restano nel gruppo "ingresso" della pagina web, come prima
 select:
@@ -35,10 +35,25 @@ switch:
     web_server:
       sorting_group_id: grp_ingresso
 
+# pulsante di prova: simula il tasto premuto (come il tasto a muro), la durata è quella della pressione lunga
 button:
-  - id: !extend sim_btn
+  - platform: template
+    name: "Simula pressione lunga"
+    id: sim_btn
+    icon: mdi:gesture-tap-hold
+    entity_category: config
     web_server:
       sorting_group_id: grp_ingresso
+    on_press:
+      # secondo tocco mentre sta "premendo": rilascia subito
+      - if:
+          condition:
+            script.is_running: sim_hold
+          then:
+            - script.stop: sim_hold
+            - lambda: 'id(sim_press) = false;'
+          else:
+            - script.execute: sim_hold
 
 event:
   - id: !extend input_event
@@ -189,6 +204,20 @@ globals:
     initial_value: "0"
 
 script:
+  # simula il tasto tenuto premuto: lo rilascia subito dopo la soglia, a meno che l'azione della pressione lunga
+  # (input_longpress_hook, per esempio una rampa) stia ancora girando: allora aspetta che finisca (limite 30 s)
+  - id: sim_hold
+    mode: single
+    then:
+      - lambda: 'id(sim_press) = true;'
+      - delay: !lambda 'return (uint32_t) (id(lp_threshold).state * 1000.0f) + 300;'
+      - wait_until:
+          condition:
+            not:
+              script.is_running: input_longpress_hook
+          timeout: 30s
+      - lambda: 'id(sim_press) = false;'
+
   # l'ingresso comanda le Wiz (stesso percorso del comando da Home Assistant) invece del relè
   - id: !extend input_action
     then:
