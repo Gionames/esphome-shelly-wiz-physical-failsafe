@@ -16,6 +16,7 @@
 # Modificato nel 2026 da Gionames (lavoro derivato, Apache-2.0): nome e versione del progetto propri, nessuna
 # dipendenza da repository di terzi, relè e ingresso unificati in shelly-relay-input.yaml. Vedi NOTICE.
 #
+import tempfile
 from pathlib import Path
 
 import esphome.config_validation as cv
@@ -40,11 +41,18 @@ CONFIG_SCHEMA = cv.Schema(
 
 
 def _final_validate(config):
-    # tab icon for the device page: web_server serves an empty one. The script ships inside this
-    # component, so it works the same for local builds and for adopted devices built from GitHub
-    web_server = fv.full_config.get().get("web_server")
+    # tab icon and firmware version in the title of the device page: web_server serves an empty icon
+    # and no version. The script ships inside this component, so it works the same for local builds
+    # and for adopted devices built from GitHub; the project version is filled in here.
+    full = fv.full_config.get()
+    web_server = full.get("web_server")
     if web_server is not None and CONF_JS_INCLUDE not in web_server:
-        web_server[CONF_JS_INCLUDE] = str(Path(__file__).parent / "favicon.js")
+        project = full.get("esphome", {}).get("project", {})
+        version = str(project.get("version", "")).replace("\\", "").replace('"', "")
+        script = (Path(__file__).parent / "favicon.js").read_text(encoding="utf-8")
+        out = Path(tempfile.gettempdir()) / f"gionames-web-{version or 'dev'}.js"
+        out.write_text(script.replace("__VERSION__", version), encoding="utf-8")
+        web_server[CONF_JS_INCLUDE] = str(out)
     return config
 
 

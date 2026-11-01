@@ -9,6 +9,10 @@ a rebuild that only bumps the version string is easy to tell apart from a real c
 
 ---
 
+## [1.0.3] - 2026-11-01
+
+- La versione del firmware compare nel titolo della pagina web del dispositivo e nella scheda del browser (es. "Shelly 2PM Gen4 cadaa0 · v1.0.3").
+
 ## [1.0.2] - 2026-11-01
 
 - Icona (casa bianca) nella scheda del browser per la pagina web del dispositivo, inclusa nel componente `shelly_gen4_partition` e servita dal dispositivo stesso.
