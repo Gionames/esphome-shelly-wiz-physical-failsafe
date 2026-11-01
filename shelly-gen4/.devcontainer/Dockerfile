@@ -15,7 +15,7 @@
 #
 
 #
-#   docker build -t automatous-io/shelly-gen4-esphome-builder:2026.8.2 .devcontainer
+#   docker build -t gionames/shelly-gen4-esphome-builder:2026.8.2 .devcontainer
 #
 # The official ESPHome image and nothing else. The Home Assistant add-on is
 # built from the same image, so a build here uses the toolchain an adopted

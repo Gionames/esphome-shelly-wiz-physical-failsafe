@@ -13,6 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+# Modificato nel 2026 da Gionames (lavoro derivato, Apache-2.0): nome e versione del progetto propri, nessuna
+# dipendenza da repository di terzi, relè e ingresso unificati in shelly-relay-input.yaml. Vedi NOTICE.
+#
 # Shelly 1PM Mini Gen4 — full model config: relay, switch input, button, status LED,
 # BL0942 power metering, and the onboard NTC.
 #
@@ -26,7 +29,6 @@ substitutions:
   input_mode: "Pulsante: ogni pressione commuta l'uscita (Momentary)" # initial Input Mode of the input (Flip, Momentary, Follow, Activate, Detached); same behaviour as upstream "Linked"
   input_debounce_ms: "50" # initial switch input debounce, ms (runtime number)
   log_level: "INFO" # Logger verbosity (DEBUG, VERBOSE for troubleshooting)
-  ap_password: "automatous" # Fallback hotspot password
   factory_reset_hold: "5s" # Button hold time before factory reset
   line_frequency: "60Hz" # Mains frequency; 50Hz outside North America
   power_update_interval: "10s" # How often the power meter publishes
@@ -69,7 +71,7 @@ esphome:
 # converted devices broadcast this URL. The ESPHome dashboard can offer adoption.
 # false keeps adopted stubs as references, every rebuild pulls updates from this repo.
 dashboard_import:
-  package_import_url: github://automatous-io/shelly-gen4-esphome/configs/shelly-1pm-mini-gen4.yaml@main
+  package_import_url: github://Gionames/esphome-shelly-wiz-physical-failsafe/shelly-gen4/configs/shelly-1pm-mini-gen4.yaml@sperimentale
   import_full_config: false
 
 # relay, input, Input Mode, Relay Mode and Pulse Length come from shelly-relay-input.yaml.

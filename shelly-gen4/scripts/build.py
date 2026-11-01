@@ -14,12 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+# Modificato nel 2026 da Gionames (lavoro derivato, Apache-2.0): nome e versione del progetto propri, nessuna
+# dipendenza da repository di terzi, relè e ingresso unificati in shelly-relay-input.yaml. Vedi NOTICE.
+#
 """
 Build flash-ready artifacts for one model in one command.
 
     python3 scripts/build.py shelly-1-gen4
-    -> automatous-io-shelly-1-gen4-esphome-v<version>-ota.zip      (stock web UI OTA)
-    -> automatous-io-shelly-1-gen4-esphome-v<version>-uart.bin     (UART/esptool full-flash image)
+    -> gionames-shelly-1-gen4-esphome-v<version>-ota.zip      (stock web UI OTA)
+    -> gionames-shelly-1-gen4-esphome-v<version>-uart.bin     (UART/esptool full-flash image)
 
 The version comes from the base config's project version so artifacts always
 agree with what the repo says; --version overrides it for test builds.
@@ -166,7 +169,7 @@ def main():
         sys.exit("zip packaging failed")
 
     make_merged_bin(zipper, build_dir,
-                    ROOT / f"automatous-io-{args.model}-esphome-v{args.version}-uart.bin")
+                    ROOT / f"gionames-{args.model}-esphome-v{args.version}-uart.bin")
 
 
 if __name__ == "__main__":

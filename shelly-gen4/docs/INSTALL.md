@@ -4,7 +4,7 @@
 
 Two ways in. The stock web UI takes one zip over your existing network and needs no adapter, and UART writes the same image with the device open. Both paths write the same layout; only the delivery differs.
 
-Download both artifacts from the [latest release](../../../releases/latest): `automatous-io-<model>-esphome-vX.Y.Z-ota.zip` for the stock web UI, `-uart.bin` for esptool over UART. Check your download against the release's `SHA256SUMS`. [Building](BUILDING.md) produces the same two files if you would rather compile them.
+Download both artifacts from the [latest release](../../../releases/latest): `gionames-<model>-esphome-vX.Y.Z-ota.zip` for the stock web UI, `-uart.bin` for esptool over UART. Check your download against the release's `SHA256SUMS`. [Building](BUILDING.md) produces the same two files if you would rather compile them.
 
 ## Contents
 
@@ -37,7 +37,7 @@ A zip uploaded on slot 0 does no harm: the installer logs `Skipping app`, stalls
 ```bash
 # with the device open, in flash mode, and disconnected from mains
 esptool --chip esp32c6 --port <PORT> read-flash 0x0 ALL shelly-<model>-gen4-stock-<MAC>.bin
-esptool --chip esp32c6 --port <PORT> write-flash 0x0 automatous-io-shelly-<model>-gen4-esphome-vX.Y.Z-uart.bin
+esptool --chip esp32c6 --port <PORT> write-flash 0x0 gionames-shelly-<model>-gen4-esphome-vX.Y.Z-uart.bin
 ```
 
 The UART wiring, flash mode, and pinout are covered in shelly-1-gen4-matter-thread's [Flashing Guide](https://github.com/automatous-io/shelly-1-gen4-matter-thread/blob/main/docs/FLASHING.md), and apply here unchanged.

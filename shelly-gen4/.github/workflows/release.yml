@@ -109,8 +109,8 @@ jobs:
         with:
           name: firmware-${{ matrix.model }}
           path: |
-            automatous-io-${{ matrix.model }}-esphome-v*-ota.zip
-            automatous-io-${{ matrix.model }}-esphome-v*-uart.bin
+            gionames-${{ matrix.model }}-esphome-v*-ota.zip
+            gionames-${{ matrix.model }}-esphome-v*-uart.bin
             provenance-${{ matrix.model }}.json
           if-no-files-found: error
 
@@ -134,7 +134,7 @@ jobs:
         run: |
           models=$(ls dist/provenance-*.json | wc -l)
           for kind in ota.zip uart.bin; do
-            found=$(ls dist/automatous-io-*-esphome-${GITHUB_REF_NAME}-$kind 2>/dev/null | wc -l)
+            found=$(ls dist/gionames-*-esphome-${GITHUB_REF_NAME}-$kind 2>/dev/null | wc -l)
             test "$found" -eq "$models" || {
               echo "$found $kind assets for $GITHUB_REF_NAME but $models models built"; exit 1; }
           done
@@ -150,7 +150,7 @@ jobs:
 
       - name: Write SHA256SUMS
         working-directory: dist
-        run: sha256sum automatous-io-*-esphome-v*-ota.zip automatous-io-*-esphome-v*-uart.bin > SHA256SUMS
+        run: sha256sum gionames-*-esphome-v*-ota.zip gionames-*-esphome-v*-uart.bin > SHA256SUMS
 
       # The binaries link ESPHome's C++ runtime, which is GPLv3; every release
       # has to point at corresponding source. The toolchain versions come from the
@@ -231,6 +231,6 @@ jobs:
           draft: true
           body_path: dist/notes.md
           files: |
-            dist/automatous-io-*-esphome-v*-ota.zip
-            dist/automatous-io-*-esphome-v*-uart.bin
+            dist/gionames-*-esphome-v*-ota.zip
+            dist/gionames-*-esphome-v*-uart.bin
             dist/SHA256SUMS

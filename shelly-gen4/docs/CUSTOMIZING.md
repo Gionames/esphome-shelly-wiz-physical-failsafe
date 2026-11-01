@@ -44,7 +44,6 @@ Relay linking, relay mode, and pulse length are also select entities in Home Ass
 | `relay_restore` | `RESTORE_DEFAULT_OFF` | relay power-on behavior, also `RESTORE_DEFAULT_ON`, `ALWAYS_OFF`, `ALWAYS_ON` |
 | `input_debounce` | `50ms` | switch input debounce filter |
 | `log_level` | `INFO` | logger verbosity, `DEBUG` or `VERBOSE` for troubleshooting |
-| `ap_password` | `automatous` | fallback hotspot password |
 | `factory_reset_hold` | `5s` | button hold time before factory reset |
 
 ## Models with an NTC

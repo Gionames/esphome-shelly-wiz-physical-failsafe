@@ -13,6 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+# Modificato nel 2026 da Gionames (lavoro derivato, Apache-2.0): nome e versione del progetto propri, nessuna
+# dipendenza da repository di terzi, relè e ingresso unificati in shelly-relay-input.yaml. Vedi NOTICE.
+#
 # Shelly 1PM Gen4 — full model config: relay, switch input, button, status LED,
 # BL0942 power metering, and the onboard NTC.
 #
@@ -26,7 +29,6 @@ substitutions:
   relay_restore: "RESTORE_DEFAULT_OFF" # Relay power-on behavior (RESTORE_DEFAULT_ON, ALWAYS_OFF, ALWAYS_ON, ...)
   input_debounce: "50ms" # Switch input debounce filter
   log_level: "INFO" # Logger verbosity (DEBUG, VERBOSE for troubleshooting)
-  ap_password: "automatous" # Fallback hotspot password
   factory_reset_hold: "5s" # Button hold time before factory reset
   line_frequency: "60Hz" # Mains frequency; 50Hz outside North America
   power_update_interval: "10s" # How often the power meter publishes
@@ -44,7 +46,7 @@ packages:
 # converted devices broadcast this URL. The ESPHome dashboard can offer adoption.
 # false keeps adopted stubs as references, every rebuild pulls updates from this repo.
 dashboard_import:
-  package_import_url: github://automatous-io/shelly-gen4-esphome/configs/shelly-1pm-gen4.yaml@main
+  package_import_url: github://Gionames/esphome-shelly-wiz-physical-failsafe/shelly-gen4/configs/shelly-1pm-gen4.yaml@sperimentale
   import_full_config: false
 
 # O terminal relay. In Momentary mode it turns itself back off after the selected pulse.

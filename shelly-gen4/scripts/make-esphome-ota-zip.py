@@ -14,6 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+# Modificato nel 2026 da Gionames (lavoro derivato, Apache-2.0): nome e versione del progetto propri, nessuna
+# dipendenza da repository di terzi, relè e ingresso unificati in shelly-relay-input.yaml. Vedi NOTICE.
+#
 """
 Build Shelly Web UI OTA zip(s) from an ESPHome (esp-idf) build.
 
@@ -75,7 +78,7 @@ def write_zip(out_dir, tmp, hardware, app_code, compatible, paths, pt_addr, boot
         return {"src": member, "size": size, "cs_sha256": sha, **extra}
 
     now = datetime.datetime.now(datetime.timezone.utc)
-    stem = f"automatous-io-{hardware}-esphome-v{version}-ota"
+    stem = f"gionames-{hardware}-esphome-v{version}-ota"
     manifest = {
         "name": app_code,
         "platform": PLATFORM,

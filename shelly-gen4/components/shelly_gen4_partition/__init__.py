@@ -13,13 +13,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+# Modificato nel 2026 da Gionames (lavoro derivato, Apache-2.0): nome e versione del progetto propri, nessuna
+# dipendenza da repository di terzi, relè e ingresso unificati in shelly-relay-input.yaml. Vedi NOTICE.
+#
 from pathlib import Path
 
 import esphome.config_validation as cv
 from esphome.components import esp32
 
 DEPENDENCIES = ["esp32"]
-CODEOWNERS = ["@automatous-io"]
+CODEOWNERS = ["@Gionames"]
 
 CONF_LAYOUT = "layout"
 

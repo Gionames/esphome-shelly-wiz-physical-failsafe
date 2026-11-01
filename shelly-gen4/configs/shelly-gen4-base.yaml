@@ -13,6 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+# Modificato nel 2026 da Gionames (lavoro derivato, Apache-2.0): nome e versione del progetto propri, nessuna
+# dipendenza da repository di terzi, relè e ingresso unificati in shelly-relay-input.yaml. Vedi NOTICE.
+#
 # Shared base for every Shelly Gen4 (ESP-Shelly-C68F (ESP32-C6), 8MB flash).
 #
 
@@ -22,8 +25,8 @@ esphome:
   # unique name per device out of the box; adoption stubs set their own name and disable this
   name_add_mac_suffix: true
   project:
-    name: automatous-io.${device_name}
-    version: "1.5.2"
+    name: gionames.${device_name}
+    version: "1.0.0"
 
 esp32:
   board: esp32-c6-devkitm-1
@@ -40,7 +43,6 @@ esp32:
 # fallback hotspot + captive portal for first boot and whenever Wi-Fi is unreachable
 wifi:
   ap:
-    password: "${ap_password}"
   # the Bluetooth scan only runs while Wi-Fi is connected. a continuous scan starves the
   # hotspot, and joining it fails as if the password were wrong
   on_connect:
@@ -142,7 +144,11 @@ button:
 # that have nothing but this repo's URL. removing this breaks every adopted device's
 # next rebuild. see docs/PARTITIONS.md
 external_components:
-  - source: github://automatous-io/shelly-gen4-esphome@main
+  - source:
+      type: git
+      url: https://github.com/Gionames/esphome-shelly-wiz-physical-failsafe
+      ref: sperimentale
+      path: shelly-gen4/components
     components: [shelly_gen4_partition]
     refresh: 1d
 

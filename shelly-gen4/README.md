@@ -1,11 +1,9 @@
 # Shelly Gen4 ESPHome
 
+> **Origine e licenza.** Lavoro derivato da [automatous-io/shelly-gen4-esphome](https://github.com/automatous-io/shelly-gen4-esphome) v1.5.2, distribuito con licenza Apache 2.0 (vedi `LICENSE` e `NOTICE`). Questo repository è autonomo: nome del progetto, versione, componenti, script di build e artefatti sono propri e non dipendono da repository di terzi. I link ai progetti originali restano come crediti.
+
+
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Release](https://img.shields.io/github/v/release/automatous-io/shelly-gen4-esphome)](../../releases/latest)
-![Last Commit](https://img.shields.io/github/last-commit/automatous-io/shelly-gen4-esphome)
-[![Downloads](https://img.shields.io/github/downloads/automatous-io/shelly-gen4-esphome/total)](../../releases)
-[![Stars](https://img.shields.io/github/stars/automatous-io/shelly-gen4-esphome?style=social)](../../stargazers)
-[![Buy Me a Coffee](https://img.shields.io/badge/Buy_Me_a_Coffee-support-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/automatous.io)
 
 > **⚠️ Disclaimer.** Installing third-party firmware voids your Shelly warranty, and Shelly cannot provide technical support for a device running third-party code. Incorrect flashing can brick your device. Always back up your original firmware before proceeding. You assume all responsibility for any damage, data loss, or device failure. This project is not affiliated with Shelly, Allterco Robotics, ESPHome, CSA, or Espressif Systems.
 
@@ -36,7 +34,7 @@ Every supported model is verified on real hardware, and the metering models are 
 - [Documentation](#documentation)
 - [Repository layout](#repository-layout)
 - [Credits](#credits)
-- [Other projects from Automatous](#other-projects-from-automatous)
+- [Credits and related projects](#credits-and-related-projects)
 - [License](#license)
 
 ---
@@ -87,7 +85,7 @@ The non-metering models and the rest of the entities are in [First Boot and Adop
 
 Prebuilt firmware, and the stock web UI needs no UART adapter. Nothing to compile and no shell, so a Home Assistant OS install is enough.
 
-1. Download `automatous-io-<model>-esphome-vX.Y.Z-ota.zip` from the [latest release](../../releases/latest).
+1. Download `gionames-<model>-esphome-vX.Y.Z-ota.zip` from the [latest release](../../releases/latest).
 2. [Install it through the stock Shelly web UI](docs/INSTALL.md#stock-web-ui), after [checking the running slot](docs/INSTALL.md#check-the-running-slot-first).
 3. [Join it to Wi-Fi and adopt it](docs/ADOPTION.md) in Home Assistant or ESPHome Builder.
 
@@ -171,7 +169,7 @@ Most of the device-specific knowledge here comes from [shelly-1-gen4-matter-thre
 
 ---
 
-## Other projects from Automatous
+## Credits and related projects
 
 | Project | What it is |
 |---|---|

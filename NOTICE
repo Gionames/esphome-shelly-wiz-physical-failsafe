@@ -1,0 +1,14 @@
+Shelly Gen4 ESPHome base (Gionames)
+
+Questo software è un lavoro derivato da "shelly-gen4-esphome" v1.5.2
+(https://github.com/automatous-io/shelly-gen4-esphome),
+Copyright 2026 AUTOMATOUS.IO, distribuito con licenza Apache License 2.0.
+
+Modifiche rispetto all'originale (Gionames, 2026):
+- nome e versione del progetto propri (gionames.<dispositivo>, versione 1.0.0);
+- rimossi i riferimenti operativi al repository originale (external_components, dashboard_import,
+  nomi degli artefatti di build, password predefinita dell'hotspot);
+- relè e ingresso unificati in configs/shelly-relay-input.yaml (modalità ingresso Flip/Momentary/Follow/Activate/Detached
+  al posto di Relay Linking, blocco, inversione, antirimbalzo, pressione lunga).
+
+Il testo della licenza è nel file LICENSE. Le note di copyright originali sono mantenute nei file.

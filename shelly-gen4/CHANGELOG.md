@@ -9,6 +9,14 @@ a rebuild that only bumps the version string is easy to tell apart from a real c
 
 ---
 
+## [1.0.0] - 2026-11-01
+
+Prima versione indipendente (derivata da shelly-gen4-esphome v1.5.2, Apache-2.0, vedi NOTICE).
+
+- Nuovo nome progetto `gionames.<dispositivo>` e nuova numerazione versione.
+- Rimossi tutti i riferimenti operativi al repository originale: `external_components`, `dashboard_import`, nomi degli artefatti (`gionames-<modello>-esphome-v<versione>-ota.zip` / `-uart.bin`), password dell'hotspot di fallback (hotspot aperto).
+- Relè e ingresso unificati in `shelly-relay-input.yaml` con hook additivi per estensioni.
+
 ## 1.5.2
 
 **Ids on the switch inputs, the onboard button, and two base entities, so a stub can `!extend`

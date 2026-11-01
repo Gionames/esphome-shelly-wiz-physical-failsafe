@@ -13,6 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+# Modificato nel 2026 da Gionames (lavoro derivato, Apache-2.0): nome e versione del progetto propri, nessuna
+# dipendenza da repository di terzi, relè e ingresso unificati in shelly-relay-input.yaml. Vedi NOTICE.
+#
 # Shelly Plug US Gen4 — full model config: relay, button, LED ring,
 # BL0942 power metering, and the LTR-329 light sensor.
 #
@@ -27,7 +30,6 @@ substitutions:
   ring_mode: "Power" # Power, Relay State, or Manual; stock's LED modes, Power is stock's default
   ring_max_power: "1800" # Power mode turns the ring fully red at this many watts
   log_level: "INFO" # Logger verbosity (DEBUG, VERBOSE for troubleshooting)
-  ap_password: "automatous" # Fallback hotspot password
   factory_reset_hold: "5s" # Button hold time before factory reset
   line_frequency: "60Hz" # Mains frequency
   power_update_interval: "10s" # How often the power meter publishes
@@ -60,7 +62,7 @@ esphome:
 # converted devices broadcast this URL. The ESPHome dashboard can offer adoption.
 # false keeps adopted stubs as references, every rebuild pulls updates from this repo.
 dashboard_import:
-  package_import_url: github://automatous-io/shelly-gen4-esphome/configs/shelly-plug-us-gen4.yaml@main
+  package_import_url: github://Gionames/esphome-shelly-wiz-physical-failsafe/shelly-gen4/configs/shelly-plug-us-gen4.yaml@sperimentale
   import_full_config: false
 
 # In Momentary mode the relay turns itself back off after the selected pulse.

@@ -36,8 +36,8 @@ A model's build directory under `configs/.esphome/` belongs to whichever environ
 
 | Artifact | For |
 |---|---|
-| `automatous-io-<model>-esphome-vX.Y.Z-ota.zip` | the stock Shelly web UI |
-| `automatous-io-<model>-esphome-vX.Y.Z-uart.bin` | esptool over UART |
+| `gionames-<model>-esphome-vX.Y.Z-ota.zip` | the stock Shelly web UI |
+| `gionames-<model>-esphome-vX.Y.Z-uart.bin` | esptool over UART |
 
 `--version` overrides the stamped version for test builds. Run `python3 scripts/build.py` with no arguments to list buildable models, then pass one in place of `shelly-1-gen4` above. `esphome compile configs/<model>.yaml` works for a plain compile check.
 

@@ -14,7 +14,7 @@ What happens after the conversion reboots: joining Wi-Fi, what shows in Home Ass
 
 ## First boot
 
-The conversion ships blank settings. The device opens a hotspot (`<model>-<suffix>`, so `shelly-1-gen4-52ab8c`, `shelly-1pm-gen4-52ab8c`, `shelly-1-mini-gen4-52ab8c`, `shelly-1pm-mini-gen4-52ab8c`, `shelly-2pm-gen4-52ab8c`, `shelly-plug-us-gen4-52ab8c`, or `shelly-em-mini-gen4-52ab8c`, password `automatous`) with a captive portal at 192.168.4.1 to take your Wi-Fi credentials.
+The conversion ships blank settings. The device opens a hotspot (`<model>-<suffix>`, so `shelly-1-gen4-52ab8c`, `shelly-1pm-gen4-52ab8c`, `shelly-1-mini-gen4-52ab8c`, `shelly-1pm-mini-gen4-52ab8c`, `shelly-2pm-gen4-52ab8c`, `shelly-plug-us-gen4-52ab8c`, or `shelly-em-mini-gen4-52ab8c`, hotspot aperto) with a captive portal at 192.168.4.1 to take your Wi-Fi credentials.
 
 Once connected, its web page is at `http://<model>-<suffix>.local` and Home Assistant discovers it through the native API.
 
@@ -82,7 +82,7 @@ substitutions:
   friendly_name: Shelly 1 Gen4
 
 packages:
-  automatous-io.shelly-1-gen4: github://automatous-io/shelly-gen4-esphome/configs/shelly-1-gen4.yaml@main
+  gionames.shelly-1-gen4: github://Gionames/esphome-shelly-wiz-physical-failsafe/shelly-gen4/configs/shelly-1-gen4.yaml@sperimentale
 
 esphome:
   name: ${name}

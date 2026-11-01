@@ -37,9 +37,9 @@ configs/.gitignore
 
 # Compiled artifacts
 firmware*.bin
-automatous-io-shelly-*-gen4-*.bin
-automatous-io-shelly-*-gen4-*.zip
-automatous-io-shelly-*-gen4-*.ota
+gionames-shelly-*-gen4-*.bin
+gionames-shelly-*-gen4-*.zip
+gionames-shelly-*-gen4-*.ota
 
 # IDF component manager
 idf_component_manager.yml
