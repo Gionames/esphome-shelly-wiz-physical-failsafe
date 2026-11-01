@@ -1,4 +1,4 @@
-# input.yaml (v5.0.0) - add-on Wiz per l'ingresso fisico. Richiede la base SECF >= 1.0.11 (shelly-relay-input.yaml: modalità,
+# input.yaml (v5.2.0) - add-on Wiz per l'ingresso fisico. Richiede la base SECF >= 1.0.11 (shelly-relay-input.yaml: modalità,
 # blocco, inversione, pressione lunga, evento) e wiz-core. Qui restano solo le funzioni Wiz:
 #  - l'azione dell'ingresso (input_action) comanda le Wiz tramite sw_changed invece del relè;
 #  - pressione lunga: opzioni in più "valori alternativi" e "dimmer" (la base ha "Nessuna azione" e "Evento a Home Assistant");
@@ -8,16 +8,27 @@
 # Gli id del canale 1 (n = "") della base coincidono con quelli del ramo modularizzazione.
 
 substitutions:
-  ver_input: "5.1.0"                      # versione del package (stampata nel log all'avvio)
+  ver_input: "5.2.0"                      # versione del package (stampata nel log all'avvio)
 
-# le entità della base restano nel gruppo "ingresso" della pagina web, come prima
+# capitoli della pagina web (razionalizzazione): le entità della base vanno nei gruppi "Input and button" e "Long press and dimmer"; peso = ordine nel capitolo.
+# prima era: le entità della base restano nel gruppo "ingresso" della pagina web, come prima
 select:
   - id: !extend input_mode_select
     web_server:
       sorting_group_id: grp_ingresso
+      sorting_weight: 10
   - id: !extend cmd_timing_select
     web_server:
       sorting_group_id: grp_ingresso
+      sorting_weight: 60
+  - id: !extend relay_mode_select      # impostazioni del relè nel capitolo "Relay and coil-pwm settings" (con coil-pwm: pesi 10-14)
+    web_server:
+      sorting_group_id: grp_rele
+      sorting_weight: 1
+  - id: !extend pulse_select
+    web_server:
+      sorting_group_id: grp_rele
+      sorting_weight: 2
   - id: !extend longpress_select
     # le opzioni si accodano a quelle della base: indice 2 = valori alternativi, 3 = dimmer
     options:
@@ -25,15 +36,18 @@ select:
       - "Dimmer: tenendo premuto la luminosità sale o scende"
     initial_option: "Dimmer: tenendo premuto la luminosità sale o scende"
     web_server:
-      sorting_group_id: grp_ingresso
+      sorting_group_id: grp_dimmer
+      sorting_weight: 10
 
 switch:
   - id: !extend input_lock
     web_server:
       sorting_group_id: grp_ingresso
+      sorting_weight: 20
   - id: !extend input_invert
     web_server:
       sorting_group_id: grp_ingresso
+      sorting_weight: 30
 
 # pulsante di prova: simula il tasto premuto (come il tasto a muro), la durata è quella della pressione lunga
 button:
@@ -43,7 +57,8 @@ button:
     icon: mdi:gesture-tap-hold
     entity_category: config
     web_server:
-      sorting_group_id: grp_ingresso
+      sorting_group_id: grp_dimmer
+      sorting_weight: 40
     on_press:
       # secondo tocco mentre sta "premendo": rilascia subito
       - if:
@@ -59,6 +74,7 @@ event:
   - id: !extend input_event
     web_server:
       sorting_group_id: grp_ingresso
+      sorting_weight: 40
 
 binary_sensor:
   # in failsafe il comando "Al rilascio" parte comunque subito (come prima)
@@ -82,7 +98,8 @@ text_sensor:
     update_interval: 1h
     lambda: 'return {"Pressione = comando subito (pressione lunga: la luce si spegne e poi passa ai valori alternativi). Rilascio = comando al rilascio, nessun lampeggio ma ritardo pari alla durata del tocco."};'
     web_server:
-      sorting_group_id: grp_diag
+      sorting_group_id: grp_ingresso
+      sorting_weight: 61
   - platform: template
     name: "Wiz - guida pressione lunga"
     icon: mdi:information-outline
@@ -90,15 +107,18 @@ text_sensor:
     update_interval: 1h
     lambda: 'return {"Solo in modalità a pulsante. Alla durata impostata: luminosità e colore alternativi (accende se spenta) oppure evento a Home Assistant. In failsafe non agisce."};'
     web_server:
-      sorting_group_id: grp_diag
+      sorting_group_id: grp_dimmer
+      sorting_weight: 11
 
 number:
   - id: !extend lp_threshold
     web_server:
-      sorting_group_id: grp_ingresso
+      sorting_group_id: grp_dimmer
+      sorting_weight: 20
   - id: !extend input_debounce
     web_server:
       sorting_group_id: grp_ingresso
+      sorting_weight: 35
   - platform: template
     name: "Wiz - dimmer: durata rampa"
     id: dim_ramp_s
@@ -113,7 +133,8 @@ number:
     restore_value: true
     initial_value: 2
     web_server:
-      sorting_group_id: grp_ingresso
+      sorting_group_id: grp_dimmer
+      sorting_weight: 50
   - platform: template
     name: "Wiz - dimmer: temperatura al minimo"
     id: dim_kmin
@@ -128,7 +149,8 @@ number:
     restore_value: true
     initial_value: 1000
     web_server:
-      sorting_group_id: grp_ingresso
+      sorting_group_id: grp_dimmer
+      sorting_weight: 54
   - platform: template
     name: "Wiz - dimmer: intervallo passo"
     id: dim_step
@@ -143,7 +165,8 @@ number:
     restore_value: true
     initial_value: 150
     web_server:
-      sorting_group_id: grp_ingresso
+      sorting_group_id: grp_dimmer
+      sorting_weight: 53
   - platform: template
     name: "Wiz - dimmer: fase colore, curva del bianco"
     id: dim_wp
@@ -157,7 +180,8 @@ number:
     restore_value: true
     initial_value: 3
     web_server:
-      sorting_group_id: grp_ingresso
+      sorting_group_id: grp_dimmer
+      sorting_weight: 52
   - platform: template
     name: "Wiz - dimmer: durata rampa colore"
     id: dim_rc
@@ -172,7 +196,8 @@ number:
     restore_value: true
     initial_value: 1
     web_server:
-      sorting_group_id: grp_ingresso
+      sorting_group_id: grp_dimmer
+      sorting_weight: 51
 
 globals:
   - id: !extend input_to_relay   # l'ingresso non comanda più il relè: comanda le Wiz
@@ -346,6 +371,7 @@ esphome:
   on_boot:
     - priority: 900
       then:
+        - delay: 2s   # dopo l'avvio dei componenti, altrimenti lo stato della versione resta vuoto
         - text_sensor.template.publish:
             id: ver_input_ts
             state: "${ver_input}"

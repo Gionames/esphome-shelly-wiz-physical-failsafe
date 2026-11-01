@@ -10,5 +10,5 @@
 web_server:
   sorting_groups:
     - id: grp_ver
-      name: "Versioni"
+      name: "Versions"
       sorting_weight: 95
