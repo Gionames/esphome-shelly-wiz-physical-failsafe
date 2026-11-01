@@ -15,16 +15,22 @@
       if (e.shadowRoot) each(e.shadowRoot, fn);
     });
   }
+  var heading = null;
   function apply() {
     // the page sets its title after loading: do nothing until there is one
     var base = document.title.split(suffix).join("").trim();
     if (!base) return;
     if (document.title.indexOf(suffix) < 0) document.title = base + suffix;
-    // the visible heading is rebuilt by the page when it receives the title, so keep checking
+    // the page rebuilds its heading when it receives the title: search the DOM only when our copy is gone
+    if (heading && heading.isConnected && heading.textContent === base + suffix) return;
+    heading = null;
     each(document, function (e) {
-      if (e.children.length === 0 && e.textContent.trim() === base) e.textContent = base + suffix;
+      if (!heading && e.children.length === 0 && e.textContent.trim() === base) {
+        e.textContent = base + suffix;
+        heading = e;
+      }
     });
   }
   apply();
-  setInterval(apply, 1000);
+  setInterval(apply, 2000);
 })();

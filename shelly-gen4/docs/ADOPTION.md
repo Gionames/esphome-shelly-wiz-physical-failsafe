@@ -94,13 +94,13 @@ api:
     key: ...
 ```
 
-The stub is a reference, not a copy. Every build fetches this repository's config from `main` and merges your stub on top. The stub is also where customization lives; see [Customizing](CUSTOMIZING.md).
+The stub is a reference, not a copy. Every build fetches this repository's config from `sperimentale` and merges your stub on top. The stub is also where customization lives; see [Customizing](CUSTOMIZING.md).
 
 ## The update channel
 
 That package reference is the update channel. Improvements pushed here reach your device the next time you hit Install, with nothing to edit on your side (package fetches are cached for up to a day).
 
-From 1.0.0 the stable ids, substitution names, and package URLs only change with a major version, and adopted devices can track `main` safely. To pin a known state instead, point the package ref at a tag or commit.
+From 1.0.0 the stable ids, substitution names, and package URLs only change with a major version, and adopted devices can track `sperimentale` safely. To pin a known state instead, point the package ref at a tag or commit.
 
 ## Factory reset
 

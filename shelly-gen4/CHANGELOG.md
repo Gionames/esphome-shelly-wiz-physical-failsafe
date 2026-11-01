@@ -9,6 +9,11 @@ a rebuild that only bumps the version string is easy to tell apart from a real c
 
 ---
 
+## [1.0.8] - 2026-11-01
+
+- Script della pagina web più leggero: cerca il titolo nel DOM solo quando serve (prima percorreva tutta la pagina ogni secondo) e controlla ogni 2 secondi. Nessun cambiamento al firmware oltre a questo script.
+- `docs/ADOPTION.md`: i riferimenti a `main` diventano `sperimentale`.
+
 ## [1.0.7] - 2026-11-01
 
 - Gli zip di conversione e i bin UART tornano compilati con ESPHome 2026.8.2 (ESP-IDF 5.5.5), la stessa toolchain di automatous 1.5.2: bootloader identico byte per byte. Con la 2026.10.1 (1.0.5 e 1.0.6) il bootloader cambiava (ESP-IDF 5.5.6) e non era provato su una conversione. Dopo la conversione ci si aggiorna a un ESPHome più recente dal Builder o in OTA.
