@@ -19,7 +19,9 @@
 from pathlib import Path
 
 import esphome.config_validation as cv
+import esphome.final_validate as fv
 from esphome.components import esp32
+from esphome.const import CONF_JS_INCLUDE
 
 DEPENDENCIES = ["esp32"]
 CODEOWNERS = ["@Gionames"]
@@ -35,6 +37,18 @@ LAYOUTS = {
 CONFIG_SCHEMA = cv.Schema(
     {cv.Optional(CONF_LAYOUT, default="standard"): cv.one_of(*LAYOUTS, lower=True)}
 )
+
+
+def _final_validate(config):
+    # tab icon for the device page: web_server serves an empty one. The script ships inside this
+    # component, so it works the same for local builds and for adopted devices built from GitHub
+    web_server = fv.full_config.get().get("web_server")
+    if web_server is not None and CONF_JS_INCLUDE not in web_server:
+        web_server[CONF_JS_INCLUDE] = str(Path(__file__).parent / "favicon.js")
+    return config
+
+
+FINAL_VALIDATE_SCHEMA = _final_validate
 
 
 async def to_code(config):

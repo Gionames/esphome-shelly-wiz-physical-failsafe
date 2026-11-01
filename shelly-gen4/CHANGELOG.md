@@ -9,6 +9,10 @@ a rebuild that only bumps the version string is easy to tell apart from a real c
 
 ---
 
+## [1.0.2] - 2026-11-01
+
+- Icona (casa bianca) nella scheda del browser per la pagina web del dispositivo, inclusa nel componente `shelly_gen4_partition` e servita dal dispositivo stesso.
+
 ## [1.0.1] - 2026-11-01
 
 - Aggiunto il sensore di testo "Versione firmware" (versione del progetto) sulla pagina web del dispositivo e in Home Assistant.
