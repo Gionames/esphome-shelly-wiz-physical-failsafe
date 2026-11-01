@@ -1,17 +1,17 @@
 # Compila i modelli Shelly Gen4 e pubblica zip OTA, immagini UART e SHA256SUMS come release.
 # Lavoro derivato da shelly-gen4-esphome v1.5.2 (Apache-2.0, Copyright 2026 AUTOMATOUS.IO), vedi NOTICE.
-# Si avvia con un tag v* oppure a mano (workflow_dispatch) indicando la versione.
+# Si avvia con un tag gen4-v* oppure a mano (workflow_dispatch) indicando la versione.
 name: release
 
 on:
   push:
-    tags: ["v*"]
+    tags: ["gen4-v*"]
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag della release (es. v1.0.0)"
+        description: "Tag della release (es. gen4-v1.0.0)"
         required: true
-        default: "v1.0.0"
+        default: "gen4-v1.0.0"
 
 permissions:
   contents: write
