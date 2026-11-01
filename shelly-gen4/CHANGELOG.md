@@ -9,6 +9,10 @@ a rebuild that only bumps the version string is easy to tell apart from a real c
 
 ---
 
+## [1.0.9] - 2026-11-01
+
+- Il sensore "Versione firmware" è disattivato di default in Home Assistant (la versione è già nel device info) e resta visibile nella pagina web. Sui dispositivi già aggiunti a Home Assistant l'entità esistente resta attiva finché non la si disattiva a mano.
+
 ## [1.0.8] - 2026-11-01
 
 - Script della pagina web più leggero: cerca il titolo nel DOM solo quando serve (prima percorreva tutta la pagina ogni secondo) e controlla ogni 2 secondi. Nessun cambiamento al firmware oltre a questo script.
