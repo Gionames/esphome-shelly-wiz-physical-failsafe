@@ -82,4 +82,9 @@ jobs:
           sorgenti: https://github.com/esphome/esphome e questo repository al tag della release. I sorgenti del repository sono Apache-2.0.
           N
           sed -i 's/^          //' notes.md
-          gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --title "$TAG" --notes-file notes.md --prerelease --target "$GITHUB_SHA"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file notes.md --prerelease
+          else
+            gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --title "$TAG" --notes-file notes.md --prerelease --target "$GITHUB_SHA"
+          fi
