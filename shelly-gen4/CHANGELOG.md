@@ -9,6 +9,10 @@ a rebuild that only bumps the version string is easy to tell apart from a real c
 
 ---
 
+## [1.0.5] - 2026-11-01
+
+- Compilazione con ESPHome 2026.10.1 (ultima versione stabile) al posto della 2026.8.2.
+
 ## [1.0.4] - 2026-11-01
 
 - Corretto lo script della 1.0.3: svuotava la pagina web del dispositivo perché partiva quando il titolo era ancora vuoto. La 1.0.3 non va usata.
