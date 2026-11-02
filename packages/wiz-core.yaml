@@ -1,9 +1,9 @@
-# wiz-core.yaml (v5.2.1) - modulo unico: comandi Wiz UDP, quorum, failsafe sul relè (su comando e proattivo),
+# wiz-core.yaml (v5.3.0) - modulo unico: comandi Wiz UDP, quorum, failsafe sul relè (su comando e proattivo),
 # luce nativa per HA, accensione, numeri di regolazione, entità di stato del failsafe.
 # OBBLIGATORIO. Richiede la base "sperimentale" (shelly-relay-input.yaml, che definisce ingresso e relè) e i moduli input e timer.
 
 substitutions:
-  ver_wiz_core: "5.2.1"            # versione del package (stampata nel log all'avvio)
+  ver_wiz_core: "5.3.0"            # versione del package (stampata nel log all'avvio)
   wiz_group_name: "Light"
   wiz_label_1: "Wiz 1"      # nome mostrato in HA per la lampada in posizione 1 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
   wiz_label_2: "Wiz 2"      # nome mostrato in HA per la lampada in posizione 2 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
@@ -457,6 +457,28 @@ switch:
       sorting_weight: 11
 
 number:
+  # cursore della temperatura colore (2200-4000 K a passi di 100): agisce a luce accesa, mantenendo la luminosità; si riallinea alla media delle Wiz
+  - platform: template
+    name: "Temperatura colore"
+    id: wiz_live_kelvin
+    icon: mdi:thermometer
+    unit_of_measurement: "K"
+    min_value: 2200
+    max_value: 4000
+    step: 100
+    mode: slider
+    optimistic: true
+    restore_value: false
+    initial_value: 2700
+    web_server:
+      sorting_group_id: grp_luce
+      sorting_weight: 20
+    set_action:
+      - lambda: |-
+          if (!id(boot_done) || !id(pon_done) || !id(light_on_sensor).state) return;
+          id(wl_cmd_t) = millis();
+          const int bri = (int) (id(wiz_light)->remote_values.get_brightness() * 100.0f + 0.5f);
+          id(wiz_request).execute(true, bri, (int) (x + 0.5f), -1, -1, -1);
   - platform: template
     name: "Wiz - accensione: luminosità"
     id: wiz_on_brightness
@@ -1398,6 +1420,8 @@ interval:
                   fabsf(gg - rv.get_green()) > 0.03f || fabsf(bb - rv.get_blue()) > 0.03f) change = true;
             } else if (nt > 0) {
               mired = 1000000.0f / (sk / (float) nt);
+              const int k_sl = ((sk / nt) + 50) / 100 * 100;   // cursore "Temperatura colore" allineato alla media delle Wiz
+              if (k_sl >= 2200 && k_sl <= 4000 && (!id(wiz_live_kelvin).has_state() || (int) (id(wiz_live_kelvin).state + 0.5f) != k_sl)) id(wiz_live_kelvin).publish_state((float) k_sl);
               if ((((uint8_t) rv.get_color_mode()) & (uint8_t) light::ColorCapability::RGB) || fabsf(mired - rv.get_color_temperature()) > 3.0f) change = true;
             }
           }
