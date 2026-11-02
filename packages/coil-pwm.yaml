@@ -1,7 +1,7 @@
 # coil-pwm.yaml
 # Relay-coil saving: after the relay has closed, the coil is held with reduced PWM current
-# (LEDC, 20 kHz). 100% = original behaviour (no PWM). Needs wiz-physical-failsafe.yaml
-# (sorting group grp_diag). Required substitutions:
+# (LEDC, 20 kHz). 100% = original behaviour (no PWM). Needs wiz-core.yaml, which defines
+# the web sorting groups grp_rele and grp_ver used here. Required substitutions:
 #   coil_relays  ids of the relay switches, e.g. "relay_1" or "relay_1, relay_2"
 #   coil_pins    GPIO numbers driving those coils, same order, e.g. "10" or "5, 3"
 # Optional: coil_first_channel (first LEDC channel, default 4; timer 3 is used)
