@@ -1,9 +1,9 @@
-# wiz-core.yaml (v5.3.0) - modulo unico: comandi Wiz UDP, quorum, failsafe sul relè (su comando e proattivo),
+# wiz-core.yaml (v5.4.0) - modulo unico: comandi Wiz UDP, quorum, failsafe sul relè (su comando e proattivo),
 # luce nativa per HA, accensione, numeri di regolazione, entità di stato del failsafe.
 # OBBLIGATORIO. Richiede la base "sperimentale" (shelly-relay-input.yaml, che definisce ingresso e relè) e i moduli input e timer.
 
 substitutions:
-  ver_wiz_core: "5.3.0"            # versione del package (stampata nel log all'avvio)
+  ver_wiz_core: "5.4.0"            # versione del package (stampata nel log all'avvio)
   wiz_group_name: "Light"
   wiz_label_1: "Wiz 1"      # nome mostrato in HA per la lampada in posizione 1 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
   wiz_label_2: "Wiz 2"      # nome mostrato in HA per la lampada in posizione 2 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
@@ -311,6 +311,15 @@ sensor:
       sorting_weight: 13
 
 text_sensor:
+  # avviso sotto lo switch della luce: con "luminosità massima" 0 la lampada resta sempre spenta e la luce torna su spento a ogni accensione
+  - platform: template
+    name: "Avviso luce"
+    id: wiz_zero_msg
+    icon: mdi:lightbulb-alert-outline
+    update_interval: never
+    web_server:
+      sorting_group_id: grp_luce
+      sorting_weight: 12
   - platform: template
     name: "Versione - wiz-core"
     id: ver_wiz_core_ts
@@ -472,7 +481,7 @@ number:
     initial_value: 2700
     web_server:
       sorting_group_id: grp_luce
-      sorting_weight: 20
+      sorting_weight: 11
     set_action:
       - lambda: |-
           if (!id(boot_done) || !id(pon_done) || !id(light_on_sensor).state) return;
@@ -1190,6 +1199,31 @@ script:
                         - switch.turn_off: relay_1
 
 interval:
+  # avviso luce: elenca le lampade con "luminosità massima" 0 (restano sempre spente)
+  - interval: 2s
+    then:
+      - lambda: |-
+          if (!id(boot_done)) return;
+          int n = 0;
+          bool tok = false;
+          for (const char *p = "${wiz_ips}"; *p; p++) {
+            if (*p == ',' || *p == ' ') tok = false;
+            else if (!tok) { tok = true; n++; }
+          }
+          if (n > 8) n = 8;
+          int nz = 0;
+          std::string lst;
+          for (int i = 0; i < n; i++) {
+            if (id(wiz_cap)[i] == 0) {
+              nz++;
+              if (!lst.empty()) lst += ", ";
+              lst += std::to_string(i + 1);
+            }
+          }
+          std::string msg = "Nessun avviso";
+          if (n > 0 && nz == n) msg = "La luce torna spenta a ogni accensione: tutte le lampade hanno luminosità massima 0";
+          else if (nz > 0) msg = "Restano sempre spente le lampade con luminosità massima 0: " + lst;
+          if (!id(wiz_zero_msg).has_state() || id(wiz_zero_msg).state != msg) id(wiz_zero_msg).publish_state(msg);
   # sottoscrizione agli aggiornamenti di stato delle Wiz (vedi wiz_listen)
   - interval: 25ms
     then:
@@ -1466,8 +1500,9 @@ interval:
           const bool want = m == 0 ? false : m == 1 ? true : m == 2 ? before : id(sw_last) == 1;
           ESP_LOGI("boot", "wiz-core v${ver_wiz_core} - stato dopo riavvio (motivo %d): luce %s", (int) esp_reset_reason(), want ? "accesa" : "spenta");
           if (!want && !id(light_on_sensor).state) return;
-          // "Ultimo stato": riparte con la luminosità e il colore di prima (lst_*), non con quelli di accensione
-          if (want && m == 2 && id(lst_bri) > 0) {
+          // "Ultimo stato" ripristina solo acceso/spento: ogni riaccensione usa i valori di accensione (2700 K e luminosità massima), non il colore di prima.
+          // Il ripristino del colore di prima (lst_*) è disattivato con "false &&".
+          if (false && want && m == 2 && id(lst_bri) > 0) {
             // già tutte accese con gli stessi valori (per esempio dopo un OTA che non le ha riavviate): non rimando niente
             bool same = id(wiz_n) > 0;
             for (int i = 0; i < id(wiz_n) && same; i++) {
