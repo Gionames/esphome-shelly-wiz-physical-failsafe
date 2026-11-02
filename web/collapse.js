@@ -1,8 +1,8 @@
 /* Pagina web del Mini: capitoli (gruppi) chiudibili e spostabili (trascinando l'intestazione), Debug Log chiudibile.
    js_url sostituisce lo script principale della pagina: lo carico io (stesso indirizzo di default) e poi aggiungo le funzioni. */
 (function () {
-  var OPEN = ['O1:', 'Power-on brightness values', 'Long press'];
-  var ORDER = ['O1:', 'Failsafe', 'Long press and dimmer', 'Input and button', 'Relay and coil-pwm settings', 'Versions', 'Power-on brightness values', 'Brightness limits', 'Timer', 'Bluetooth', 'System', 'Diagnostic', 'Measurements', 'Wi-Fi', 'Protections'];   // ordine di default dei capitoli; gruppi non elencati: in cima
+  var OPEN = ['O1:', 'Power-on brightness', 'Long press'];
+  var ORDER = ['O1:', 'Failsafe', 'Long press and dimmer', 'Input and button', 'Relay and coil-pwm settings', 'Versions', 'Power-on brightness', 'Brightness limits', 'Timer', 'Bluetooth', 'System', 'Diagnostic', 'Measurements', 'Wi-Fi', 'Protections'];   // ordine di default dei capitoli; gruppi non elencati: in cima
   var RENAME = { 'Configuration': 'Bluetooth, Restart and Factory reset' };   // titolo dei capitoli creati in automatico da ESPHome   // capitoli aperti di default; gli altri partono chiusi
   if (!window.__esphomeNoLoad) {
     var s = document.createElement('script');
@@ -130,6 +130,49 @@
     lg.parentElement.insertBefore(bar, lg);
     return true;
   }
+
+  // tetto di luminosità: lo slider della luce va dal 10% al limite più alto impostato in "Brightness limits";
+  // lo slider e "Power-on brightness" oltre il limite diventano rossi
+  function allInputs(root, acc) {
+    root.querySelectorAll('input').forEach(function (e) { acc.push(e); });
+    root.querySelectorAll('*').forEach(function (e) { if (e.shadowRoot) allInputs(e.shadowRoot, acc); });
+    return acc;
+  }
+  function mark(el, bad) {
+    if (bad) {
+      el.style.accentColor = '#e53935'; el.style.color = '#e53935'; el.style.outline = '2px solid #e53935';
+      el.setAttribute('data-over', '1');
+    } else if (el.hasAttribute('data-over')) {
+      el.style.accentColor = ''; el.style.color = ''; el.style.outline = '';
+      el.removeAttribute('data-over');
+    }
+  }
+  function limitCheck() {
+    var app = document.querySelector('esp-app');
+    if (!app || !app.shadowRoot) return;
+    var ins = allInputs(app.shadowRoot, []);
+    var lim = 0, any = false;
+    ins.forEach(function (e) {
+      if (/ - luminosità massima$/.test(e.name || '')) {
+        any = true;
+        var v = parseFloat(e.value);
+        if (v >= 10 && v > lim) lim = v;   // valori sotto 10 = colore fisso o spenta: non contano come tetto
+      }
+    });
+    if (!any) return;
+    if (lim < 10) lim = 10;
+    ins.forEach(function (e) {
+      var n = e.name || '';
+      if (n === 'number/Wiz - accensione: luminosità') mark(e, parseFloat(e.value) > lim);
+      else if (e.type === 'range' && n.indexOf('light/') === 0) {
+        var lo = 26, hi = Math.round(lim * 2.55);
+        if (String(e.min) !== String(lo)) e.min = lo;
+        if (String(e.max) !== String(hi)) e.max = hi;
+        mark(e, parseFloat(e.value) / 2.55 > lim + 0.5);
+      }
+    });
+  }
+  setInterval(limitCheck, 500);
 
   var tries = 0, doneT = false, doneL = false;
   var iv = setInterval(function () {
