@@ -1,9 +1,9 @@
-# wiz-core.yaml (v5.4.0) - modulo unico: comandi Wiz UDP, quorum, failsafe sul relè (su comando e proattivo),
+# wiz-core.yaml (v5.4.1) - modulo unico: comandi Wiz UDP, quorum, failsafe sul relè (su comando e proattivo),
 # luce nativa per HA, accensione, numeri di regolazione, entità di stato del failsafe.
 # OBBLIGATORIO. Richiede la base "sperimentale" (shelly-relay-input.yaml, che definisce ingresso e relè) e i moduli input e timer.
 
 substitutions:
-  ver_wiz_core: "5.4.0"            # versione del package (stampata nel log all'avvio)
+  ver_wiz_core: "5.4.1"            # versione del package (stampata nel log all'avvio)
   wiz_group_name: "Light"
   wiz_label_1: "Wiz 1"      # nome mostrato in HA per la lampada in posizione 1 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
   wiz_label_2: "Wiz 2"      # nome mostrato in HA per la lampada in posizione 2 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
@@ -189,7 +189,7 @@ web_server:
       name: "${wiz_group_name}"
       sorting_weight: 10
     - id: grp_accensione
-      name: "Power-on brightness values"
+      name: "Power-on brightness and temperature values"
       sorting_weight: 20
     - id: grp_limiti
       name: "Brightness limits"
