@@ -153,7 +153,8 @@
     var ins = allInputs(app.shadowRoot, []);
     var lim = 0, any = false;
     ins.forEach(function (e) {
-      if (/ - luminosità massima$/.test(e.name || '')) {
+      // le lampade non configurate hanno l'etichetta predefinita "Wiz N" (limite 100): non contano
+      if (/ - luminosità massima$/.test(e.name || '') && !/^number\/Wiz \d - /.test(e.name)) {
         any = true;
         var v = parseFloat(e.value);
         if (v >= 10 && v > lim) lim = v;   // valori sotto 10 = colore fisso o spenta: non contano come tetto
