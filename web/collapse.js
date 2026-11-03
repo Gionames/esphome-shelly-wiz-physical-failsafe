@@ -153,7 +153,7 @@
     if (!wrap) return;
     var lb = wrap.querySelectorAll(':scope > label');
     if (lb.length > 1) {
-      var a = '10 %', b = Math.round(lim) + ' %';
+      var a = '0 %', b = Math.round(lim) + ' %';
       if (lb[0].textContent !== a) lb[0].textContent = a;
       if (lb[lb.length - 1].textContent !== b) lb[lb.length - 1].textContent = b;
     }
@@ -192,7 +192,7 @@
       var n = e.name || '';
       if (n === 'number/Wiz - accensione: luminosità') mark(e, parseFloat(e.value) > lim);
       else if (e.type === 'range' && n.indexOf('light/') === 0) {
-        var lo = 26, hi = Math.round(lim * 2.55);
+        var lo = 0, hi = Math.round(lim * 2.55);
         var chg = e.__hi !== undefined && e.__hi !== hi;
         if (String(e.min) !== String(lo)) e.min = lo;
         if (String(e.max) !== String(hi)) e.max = hi;
