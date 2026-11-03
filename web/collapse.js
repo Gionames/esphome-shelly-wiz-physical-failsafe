@@ -147,6 +147,24 @@
       el.removeAttribute('data-over');
     }
   }
+  // lo slider della luce lavora in 0-255 (scala di ESPHome): etichette e valore sopra il cursore li mostro in percentuale
+  function pct(e, lim) {
+    var wrap = e.closest('.range-wrap');
+    if (!wrap) return;
+    var lb = wrap.querySelectorAll(':scope > label');
+    if (lb.length > 1) {
+      var a = '10 %', b = Math.round(lim) + ' %';
+      if (lb[0].textContent !== a) lb[0].textContent = a;
+      if (lb[lb.length - 1].textContent !== b) lb[lb.length - 1].textContent = b;
+    }
+    function bub() {
+      var v = wrap.querySelector('.range-value');
+      var t = Math.round(parseFloat(e.value) / 2.55) + ' %';
+      if (v && v.textContent !== t) v.textContent = t;
+    }
+    bub();
+    if (!e.__pct) { e.__pct = 1; e.addEventListener('input', bub); }
+  }
   function limitCheck() {
     var app = document.querySelector('esp-app');
     if (!app || !app.shadowRoot) return;
@@ -170,6 +188,7 @@
         if (String(e.min) !== String(lo)) e.min = lo;
         if (String(e.max) !== String(hi)) e.max = hi;
         mark(e, parseFloat(e.value) / 2.55 > lim + 0.5);
+        pct(e, lim);
       }
     });
   }
