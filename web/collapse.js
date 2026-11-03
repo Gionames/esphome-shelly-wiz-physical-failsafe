@@ -165,6 +165,14 @@
     bub();
     if (!e.__pct) { e.__pct = 1; e.addEventListener('input', bub); }
   }
+  // dopo un cambio di limite rimetto nello slider la luminosità vera della luce (letta dal Mini)
+  function resync(e) {
+    var m = /^light\/(.*)$/.exec(e.name || '');
+    if (!m) return;
+    fetch('/light/' + encodeURIComponent(m[1])).then(function (r) { return r.json(); }).then(function (j) {
+      if (j && typeof j.brightness === 'number') e.value = j.brightness;
+    }).catch(function () {});
+  }
   function limitCheck() {
     var app = document.querySelector('esp-app');
     if (!app || !app.shadowRoot) return;
@@ -185,8 +193,11 @@
       if (n === 'number/Wiz - accensione: luminosità') mark(e, parseFloat(e.value) > lim);
       else if (e.type === 'range' && n.indexOf('light/') === 0) {
         var lo = 26, hi = Math.round(lim * 2.55);
+        var chg = e.__hi !== undefined && e.__hi !== hi;
         if (String(e.min) !== String(lo)) e.min = lo;
         if (String(e.max) !== String(hi)) e.max = hi;
+        e.__hi = hi;
+        if (chg) resync(e);   // il browser riduce il valore quando il massimo scende e non lo ripristina quando risale: lo rileggo dal Mini
         mark(e, parseFloat(e.value) / 2.55 > lim + 0.5);
         pct(e, lim);
       }
