@@ -1,9 +1,9 @@
-# wiz-core.yaml (v5.6.2) - modulo unico: comandi Wiz UDP, quorum, failsafe sul relè (su comando e proattivo),
+# wiz-core.yaml (v5.7.0) - modulo unico: comandi Wiz UDP, quorum, failsafe sul relè (su comando e proattivo),
 # luce nativa per HA, accensione, numeri di regolazione, entità di stato del failsafe.
 # OBBLIGATORIO. Richiede la base "sperimentale" (shelly-relay-input.yaml, che definisce ingresso e relè) e i moduli input e timer.
 
 substitutions:
-  ver_wiz_core: "5.6.2"            # versione del package (stampata nel log all'avvio)
+  ver_wiz_core: "5.7.0"            # versione del package (stampata nel log all'avvio)
   wiz_group_name: "Light"
   wiz_label_1: "Wiz 1"      # nome mostrato in HA per la lampada in posizione 1 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
   wiz_label_2: "Wiz 2"      # nome mostrato in HA per la lampada in posizione 2 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
@@ -408,6 +408,10 @@ light:
             return;
           }
           const int bri = (int) (rv.get_brightness() * 100.0f + 0.5f);
+          if (bri < 1) {   // slider a 0: luce spenta
+            id(wiz_request).execute(false, -1, 0, -1, -1, -1);
+            return;
+          }
           // riaccensione semplice da software: luce spenta e HA rimanda i valori che ricordava (l'ultima media delle Wiz, lst_*) = accensione normale,
           // cioè i valori di accensione (100% e 2700 K di default). Valori diversi da quelli ricordati (es. "accendi al 40%") restano com'erano.
           if (!id(light_on_sensor).state && id(lst_bri) > 0) {
@@ -429,6 +433,10 @@ light:
               id(wiz_request).execute(true, -1, 0, -1, -1, -1);
               return;
             }
+          }
+          if (bri < 10) {   // slider 1-9: ambra scuro, RGB 33,11,0 (la luminosità della Wiz non scende sotto il 10%)
+            id(wiz_request).execute(true, 100, 0, 33, 11, 0);
+            return;
           }
           const uint8_t cm = (uint8_t) rv.get_color_mode();
           if (cm & (uint8_t) light::ColorCapability::RGB) {
@@ -786,6 +794,10 @@ script:
           if (!rv.is_on()) return;
           id(wl_cmd_t) = millis();
           const int bri = (int) (rv.get_brightness() * 100.0f + 0.5f);
+          if (bri < 10) {
+            id(wiz_request).execute(true, 100, 0, 33, 11, 0);
+            return;
+          }
           const uint8_t cm = (uint8_t) rv.get_color_mode();
           if (cm == (uint8_t) light::ColorCapability::RGB) {
             id(wiz_request).execute(true, bri, 0, (int) (rv.get_red() * 255.0f + 0.5f), (int) (rv.get_green() * 255.0f + 0.5f), (int) (rv.get_blue() * 255.0f + 0.5f));
@@ -905,7 +917,7 @@ script:
                         // limite 0: lampada sempre spenta; limite 1-9: sotto il minimo della Wiz (10%), colore fisso RGB 33,11,0
                         mo = cap <= 0 ? R"({"method":"setPilot","params":{"state":false}})"
                                       : R"({"method":"setPilot","params":{"state":true,"r":33,"g":11,"b":0,"dimming":100}})";
-                      } else if (cap >= 10 && cap < 100) {
+                      } else if (cap >= 10 && cap < 100 && strstr(msg, "\"r\":33,\"g\":11,\"b\":0") == nullptr) {
                         const char *dm = strstr(msg, "\"dimming\":");
                         if (dm != nullptr) {
                           const int pl = (int) (dm - msg) + 10;
@@ -1436,6 +1448,7 @@ interval:
               if (!id(wiz_known)[i] || !id(wiz_lit)[i] || id(wiz_dim)[i] <= 0) continue;
               if (id(wiz_cap)[i] > 0 && id(wiz_cap)[i] < 10) continue;   // limite 1-9: ambra fisso, non entra nella media (altrimenti la luce di HA passerebbe in RGB)
               n++;
+              if (abs(id(wiz_cr)[i] - 33) <= 2 && abs(id(wiz_cg)[i] - 11) <= 2 && id(wiz_cb)[i] == 0 && id(wiz_kel)[i] <= 0) { sd += 5; nt++; sk += 2700; continue; }   // ambra 33,11,0
               sd += id(wiz_dim)[i];
               if (id(wiz_kel)[i] > 0) { nt++; sk += id(wiz_kel)[i]; }
               else if (id(wiz_cr)[i] >= 0) { nr++; sr += id(wiz_cr)[i]; sg += id(wiz_cg)[i]; sb += id(wiz_cb)[i]; }
