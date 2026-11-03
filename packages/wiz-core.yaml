@@ -1,9 +1,9 @@
-# wiz-core.yaml (v5.6.0) - modulo unico: comandi Wiz UDP, quorum, failsafe sul relè (su comando e proattivo),
+# wiz-core.yaml (v5.6.1) - modulo unico: comandi Wiz UDP, quorum, failsafe sul relè (su comando e proattivo),
 # luce nativa per HA, accensione, numeri di regolazione, entità di stato del failsafe.
 # OBBLIGATORIO. Richiede la base "sperimentale" (shelly-relay-input.yaml, che definisce ingresso e relè) e i moduli input e timer.
 
 substitutions:
-  ver_wiz_core: "5.6.0"            # versione del package (stampata nel log all'avvio)
+  ver_wiz_core: "5.6.1"            # versione del package (stampata nel log all'avvio)
   wiz_group_name: "Light"
   wiz_label_1: "Wiz 1"      # nome mostrato in HA per la lampada in posizione 1 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
   wiz_label_2: "Wiz 2"      # nome mostrato in HA per la lampada in posizione 2 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
@@ -149,7 +149,7 @@ globals:
   - id: poll_fail         # polling falliti di fila
     type: int
     initial_value: "0"
-  - id: wiz_cap          # luminosità massima % di ogni lampada (entità "Wiz N - luminosità massima"): 100 = nessun limite, 10-99 = scala la luminosità (richiesta x limite / 100, minimo 10), 1-9 = colore fisso RGB 33,11,0 (ambra scura), 0 = lampada sempre spenta
+  - id: wiz_cap          # luminosità massima % di ogni lampada (entità "Wiz N - luminosità massima"): 100 = nessun limite, 10-99 = tetto di luminosità (la luminosità richiesta non supera il limite), 1-9 = colore fisso RGB 33,11,0 (ambra scura), 0 = lampada sempre spenta
     type: int16_t[8]
   - id: wiz_dim            # ultimi valori noti di ogni lampada (dalle risposte e dalla sottoscrizione): luminosità %, temperatura K (0 = non in modalità temperatura), RGB (-1 = non in modalità colore)
     type: int16_t[8]
@@ -897,7 +897,7 @@ script:
                     d.sin_family = AF_INET;
                     d.sin_port = htons(38899);
                     d.sin_addr.s_addr = id(wiz_ip32)[i];
-                    // lampade con luminosità massima 10-99%: la luminosità del comando (10-100) viene scalata sul limite: richiesta x limite / 100, minimo 10
+                    // lampade con luminosità massima 10-99%: la luminosità del comando non supera il limite (tetto, nessuna riscalatura)
                     const char *mo = msg; char pm[128];
                     {
                       const int cap = id(wiz_cap)[i];
@@ -911,7 +911,7 @@ script:
                           const int pl = (int) (dm - msg) + 10;
                           const int v = atoi(dm + 10);
                           int dl = 0; while (dm[10 + dl] >= '0' && dm[10 + dl] <= '9') dl++;
-                          int nv = (v * cap + 50) / 100; if (nv < 10) nv = 10;
+                          int nv = v > cap ? cap : v; if (nv < 10) nv = 10;
                           snprintf(pm, sizeof(pm), "%.*s%d%s", pl, msg, nv, msg + pl + dl);
                           mo = pm;
                         }
@@ -945,7 +945,7 @@ script:
                     id(wiz_known)[i] = true;
                     {
                     const char *q = strstr(buf, "\"dimming\":");
-                    if (q != nullptr) { int vq = atoi(q + 10); { const int cq = id(wiz_cap)[i]; if (cq >= 10 && cq < 100) vq = (vq * 100 + cq / 2) / cq; } if (vq > 100) vq = 100; id(wiz_dim)[i] = vq; }
+                    if (q != nullptr) { int vq = atoi(q + 10); if (vq > 100) vq = 100; id(wiz_dim)[i] = vq; }
                     q = strstr(buf, "\"temp\":");
                     id(wiz_kel)[i] = q != nullptr ? atoi(q + 7) : 0;
                     q = strstr(buf, "\"r\":");
@@ -1320,7 +1320,7 @@ interval:
                       int bri = (int) (id(alt_cur) ? id(wiz_alt_brightness).state : id(wiz_on_brightness).state);
                       if (bri < 10 || bri > 100) bri = 100;
                       if (id(wiz_kind) == 3) bri = id(custom_bri);   // personalizzato: -1 = luminosità non specificata, non controllo
-                      { const int ec = id(wiz_cap)[i]; if (bri > 0 && ec >= 10 && ec < 100) { bri = (bri * ec + 50) / 100; if (bri < 10) bri = 10; } }   // la lampada con limite riporta la luminosità scalata
+                      { const int ec = id(wiz_cap)[i]; if (ec >= 10 && ec < 100 && bri > ec) bri = ec; }   // la lampada con limite riporta al massimo il limite
                       if (bri >= 0 && dp != nullptr && abs(atoi(dp + 10) - bri) > 1) match = false;
                     }
                     if (match) {
@@ -1336,7 +1336,7 @@ interval:
                   }
                   {
                     const char *q = strstr(buf, "\"dimming\":");
-                    if (q != nullptr) { int vq = atoi(q + 10); { const int cq = id(wiz_cap)[i]; if (cq >= 10 && cq < 100) vq = (vq * 100 + cq / 2) / cq; } if (vq > 100) vq = 100; id(wiz_dim)[i] = vq; }
+                    if (q != nullptr) { int vq = atoi(q + 10); if (vq > 100) vq = 100; id(wiz_dim)[i] = vq; }
                     q = strstr(buf, "\"temp\":");
                     id(wiz_kel)[i] = q != nullptr ? atoi(q + 7) : 0;
                     q = strstr(buf, "\"r\":");
