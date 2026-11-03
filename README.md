@@ -13,7 +13,7 @@ Questo ramo è la versione in uso. Sta sopra la base [SECF](https://github.com/G
 - **Slider luminosità nella pagina web** da 0 al limite impostato: 0 spegne la luce nativa, 1-9 ambra, 10 e oltre luminosità a 2700 K. Diventa rosso se i valori di accensione superano il limite.
 - **Valori di accensione** ("Power-on brightness and temperature values"): ogni riaccensione (pulsante, HA senza valori espliciti) avviene a 2700 K e alla luminosità massima impostata; fanno eccezione i comandi di HA con valori espliciti e il failsafe.
 - **Pulsante a muro**: "Comando del pulsante" (*Al rilascio* consigliato, vedi sotto), pressione lunga con opzioni *Nessuna azione*, *Evento a Home Assistant*, *Valori alternativi* e *Dimmer* continuo (arancio scuro al minimo, curva percettiva, parametri regolabili a runtime).
-- **Timer** (auto-off/auto-on), **riduzione tensione bobina relè** (PWM), antenna **Wizmote ESP-NOW**, **proxy BLE passivo**, impostazioni Wi-Fi, AP di recupero e diagnostica.
+- **Timer** (auto-off/auto-on), **riduzione tensione bobina relè** (PWM, mantenimento al 30% di default), antenna **Wizmote ESP-NOW**, **proxy BLE passivo**, impostazioni Wi-Fi, AP di recupero e diagnostica.
 - **Pagina web ordinata a capitoli** e sezione "Versions" con la versione di ogni modulo.
 
 ## Moduli
@@ -24,7 +24,7 @@ Questo ramo è la versione in uso. Sta sopra la base [SECF](https://github.com/G
 | `packages/input.yaml` | 5.2.0 | aggancia l'ingresso della base alle Wiz: azione, pressione lunga, dimmer (obbligatorio) |
 | `packages/timer.yaml` | 4.0.1 | auto-off / auto-on (obbligatorio per ora) |
 | `packages/versions.yaml` | 1.0.0 | gruppo "Versions" della pagina web (in ogni YAML) |
-| `packages/coil-pwm.yaml` + `components/coil_pwm` | 1.0.1 | riduzione tensione bobina (opzionale) |
+| `packages/coil-pwm.yaml` + `components/coil_pwm` | 1.0.1 | riduzione tensione della bobina del relè: scatto a piena tensione, poi mantenimento in PWM (opzionale, vedi sotto) |
 | `packages/wizmote-espnow-native.yaml` | 1.0.0 | antenna Wizmote ESP-NOW (opzionale) |
 | `packages/ble-passive.yaml` | 1.0.0 | proxy BLE passivo (opzionale) |
 | `packages/wifi-settings.yaml` | 1.4.3 | impostazioni e watchdog Wi-Fi (opzionale) |
@@ -79,6 +79,10 @@ Ordine: i moduli vanno **dopo** la base. Aggiungi `api`, `wifi` e le altre sezio
 
 - **Modifica ai moduli `packages/*.yaml`**: basta ricompilare e installare gli stessi YAML (il Builder riscarica il ramo, `refresh: always`). Non serve cambiarli.
 - **Modifica a `web/collapse.js`**: l'indirizzo in `js_url` punta a un commit preciso (jsDelivr tiene in cache i rami). Serve aggiornare `<commit>` in ogni YAML e reinstallare, perché `js_url` fa parte del firmware.
+
+## Riduzione tensione della bobina (coil-pwm)
+
+Il relè scatta a piena tensione per 200 ms e poi si mantiene con una PWM a 20 kHz alla percentuale impostata ("Bobina relè: mantenimento", minimo 30%, 100% = PWM spento). Il **default è 30%**: vale al primo avvio, poi resta il valore salvato. Nelle prove sui miei Shelly il mantenimento al 30% ha sempre funzionato e ha abbassato la temperatura di 7-10 gradi, che era lo scopo del package. Questo è un dato di uso reale su alcuni dispositivi, non una garanzia su ogni relè: se un relè vibra o non tiene, alza la percentuale (campi "Bobina relè: ...").
 
 ## Comando del pulsante
 
