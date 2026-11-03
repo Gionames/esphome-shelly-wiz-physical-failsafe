@@ -1,105 +1,103 @@
-# esphome-shelly-wiz-physical-failsafe
+# esphome-shelly-wiz-physical-failsafe (ramo `modulare-secf`)
 
-ESPHome packages for **Shelly Gen4** relays (tested on Shelly 2PM Gen4 and 1PM Mini Gen4) that control a group of **WiZ** smart bulbs directly over UDP (port 38899) and add a **physical failsafe**: the Shelly relay powers the bulbs, so if fewer than "Quorum Wiz" bulbs answer, the wall switch/button drives the relay (classic dumb-light behaviour) instead of leaving you in the dark.
+Moduli ESPHome per gli **Shelly Gen4** (provati su 1PM Mini Gen4) che comandano direttamente un gruppo di lampade **Wiz** via UDP e aggiungono un **failsafe fisico**: il relè dello Shelly alimenta le lampade e, se rispondono meno lampade del "Quorum Wiz", il pulsante a muro torna a comandare il relè come una luce normale invece di lasciarti al buio.
 
-Built on top of [automatous-io/shelly-gen4-esphome](https://github.com/automatous-io/shelly-gen4-esphome) (pinned to v1.5.2).
+Questo ramo è la versione in uso. Sta sopra la base [SECF](https://github.com/Gionames/SECF) (tag `gen4-v1.0.11`: relè, ingresso, Relay Mode, pressione lunga) e aggiunge solo le funzioni per le Wiz. Il resto del repository è storico (vedi "Storico").
 
-## How it works
+## Cosa fa
 
-- Commands (`setPilot` on/off) are sent to every bulb; bulbs that do not answer with `success` are retried every `wiz_retry_ms` until the confirmation time is over. A command also counts as confirmed when the push subscription (`syncPilot`) already shows the wanted state (and, for switch-on, the requested brightness); the log says whether each confirmation came from the direct reply or from the SUBSCRIPTION. If confirmations are missing, a final `getPilot` check runs before failsafe is declared.
-- The Shelly registers itself with each bulb (WiZ `registration`, UDP 38900) and receives push state updates; a safety poll runs every `poll_interval`.
-- If fewer bulbs than the adjustable **Quorum Wiz** are reachable, failsafe mode starts: the input drives the relay directly.
-- Optional power-cycle (`powercycle_ms`, off by default): opens the relay briefly if no bulb answers although powered.
-- Four fields (all prefixed `Wiz - `, so they sit together in the device page) set the colour: **Wiz - accensione: luminosità** / **Wiz - accensione: temperatura colore** (used at every normal "on") and **Wiz - pressione lunga: luminosità alternativa** / **Wiz - pressione lunga: temperatura colore alternativa** (used by the long press, see below).
-- All entities are the same on every device; only model-specific data lives in the device file.
+- **Comandi Wiz via UDP** (porta 38899) a tutte le lampade, fino a 8, con rinvio alle lampade che non rispondono e conferma anche dalla sottoscrizione (`syncPilot`, porta 38900). Lo stato reale delle lampade riallinea la luce di Home Assistant.
+- **Failsafe**: se rispondono meno lampade del "Quorum Wiz", l'ingresso comanda il relè. Controllo proattivo a luce accesa, uscita automatica quando le lampade rientrano.
+- **Luce nativa per Home Assistant e pagina web** ("Luce Wiz"), più uno slider "Temperatura colore" (2200-4000 K, passi di 100) subito sotto l'interruttore della luce.
+- **Limiti di luminosità per lampada** ("<nome lampada> - luminosità massima", 0-100): 0 = lampada sempre spenta; 1-9 = ambra fisso RGB 33,11,0; 10-100 = tetto di luminosità. Il campo "Avviso luce" dice quando la luce nativa torna spenta perché le lampade sono a zero.
+- **Slider luminosità nella pagina web** da 0 al limite impostato: 0 spegne la luce nativa, 1-9 ambra, 10 e oltre luminosità a 2700 K. Diventa rosso se i valori di accensione superano il limite.
+- **Valori di accensione** ("Power-on brightness and temperature values"): ogni riaccensione (pulsante, HA senza valori espliciti) avviene a 2700 K e alla luminosità massima impostata; fanno eccezione i comandi di HA con valori espliciti e il failsafe.
+- **Pulsante a muro**: "Comando del pulsante" (*Al rilascio* consigliato, vedi sotto), pressione lunga con opzioni *Nessuna azione*, *Evento a Home Assistant*, *Valori alternativi* e *Dimmer* continuo (arancio scuro al minimo, curva percettiva, parametri regolabili a runtime).
+- **Timer** (auto-off/auto-on), **riduzione tensione bobina relè** (PWM), antenna **Wizmote ESP-NOW**, **proxy BLE passivo**, impostazioni Wi-Fi, AP di recupero e diagnostica.
+- **Pagina web ordinata a capitoli** e sezione "Versions" con la versione di ogni modulo.
 
-## Files
+## Moduli
 
-- `packages/wiz-physical-failsafe.yaml`: Wiz control + failsafe (v3).
-- `packages/coil-pwm.yaml` + `components/coil_pwm`: optional relay-coil voltage reduction (full voltage for 200 ms to pull in, then PWM hold at a configurable %, 20 kHz LEDC). **Reduced hold (<100 %) is not yet validated on real hardware**; default is 100 % (disabled).
+| File | Versione | Ruolo |
+|---|---|---|
+| `packages/wiz-core.yaml` | 5.7.0 | comandi Wiz, quorum, failsafe, luce nativa, limiti, valori di accensione (obbligatorio) |
+| `packages/input.yaml` | 5.2.0 | aggancia l'ingresso della base alle Wiz: azione, pressione lunga, dimmer (obbligatorio) |
+| `packages/timer.yaml` | 4.0.1 | auto-off / auto-on (obbligatorio per ora) |
+| `packages/versions.yaml` | 1.0.0 | gruppo "Versions" della pagina web (in ogni YAML) |
+| `packages/coil-pwm.yaml` + `components/coil_pwm` | 1.0.1 | riduzione tensione bobina (opzionale) |
+| `packages/wizmote-espnow-native.yaml` | 1.0.0 | antenna Wizmote ESP-NOW (opzionale) |
+| `packages/ble-passive.yaml` | 1.0.0 | proxy BLE passivo (opzionale) |
+| `packages/wifi-settings.yaml` | 1.4.3 | impostazioni e watchdog Wi-Fi (opzionale) |
+| `packages/wiz-diagnostics.yaml`, `packages/recovery-ap.yaml` | - | diagnostica, AP di recupero (opzionali) |
+| `web/collapse.js` | - | capitoli, slider in percentuale e segnalazione in rosso della pagina web |
 
-## Example device (Shelly 1PM Mini Gen4)
+## Esempio di dispositivo (Shelly 1PM Mini Gen4)
+
+Il YAML del dispositivo ha un blocco di identità in cima e poi gli stessi `packages` per tutti i Mini. I valori qui sono esempi.
 
 ```yaml
 substitutions:
-  name: my-light
-  friendly_name: My light
+  name: soggiorno-sotto-1pmminig4
+  friendly_name: Soggiorno-sotto-1pmminig4
+  ip: "192.168.1.100"
+  wiz_ips: "192.168.1.201,192.168.1.202"   # max 8, separati da virgola
+  wiz_label_1: "1 soggiorno (192.168.1.201)"
+  wiz_label_2: "2 soggiorno (192.168.1.202)"
+  wiz_group_name: "Luce"
   line_frequency: "50Hz"
   relay_restore: "RESTORE_DEFAULT_ON"
-  relay_linking: "Unlinked"
-  wiz_ips: "192.168.1.66"         # comma separated, max 8
-  wiz_input_id: switch_input      # 2PM: switch_input_1
-  # wiz_group_name: "Luce"        # title of the group in the web page
   coil_relays: "relay_1"
-  coil_pins: "10"                 # relay coil GPIO (Mini: 10, 2PM: "5, 3")
+  coil_pins: "10"                          # bobina del relè (Mini: 10)
 
-packages:
-  shelly: github://automatous-io/shelly-gen4-esphome/configs/shelly-1pm-mini-gen4.yaml@v1.5.2
-  wiz: github://Gionames/esphome-shelly-wiz-physical-failsafe/packages/wiz-physical-failsafe.yaml@v3.3.0
-  coil: github://Gionames/esphome-shelly-wiz-physical-failsafe/packages/coil-pwm.yaml@v2.0.0
-```
-
-Add your own `esphome:`, `api:` and `wifi:` blocks as usual. The relay id must be `relay_1`.
-
-The confirmation time is the adjustable entity **Tempo conferma Wiz** (500-4000 ms, default 1400; Home Assistant and web page). The `getPilot` confirmation uses 4/7 of it. Optional substitutions: `wiz_retry_ms`, `powercycle_ms`, `health_check_interval` (default 4s: polling delle Wiz), `poll_interval_ms`, `polling_ms` (`wiz_deadline_ms` and `wiz_confirm_ms` still exist but default to the entity).
-
-## Input mode and push button
-
-Set **Modalità Input** to match the hardware: *Interruttore ... (Flip)* for toggle switches; *Pulsante ... (Momentary)* for push buttons (each press toggles the light). With a push button, Flip would turn the light on at press and off at release. *Activate* never turns off, so it breaks the failsafe; avoid it.
-
-For push buttons (Momentary / Activate) two more fields apply, both changeable at runtime without reflashing:
-
-- **Wiz - comando del pulsante**: *Alla pressione* sends the command to the bulbs immediately (lowest latency; with the light on, a long press turns it off first). *Al rilascio* (default) sends it when the button is released, adding the touch duration but never flashing the light on a long press.
-- **Wiz - pressione lunga** (threshold: **Wiz - pressione lunga: durata**, 0.4-3 s): *Nessuna azione*, *Imposta luminosità e colore alternativi alle Wiz* (light on: only changes brightness/colour, does not turn off; light off: turns on already with the alternative values; in failsafe it does nothing) or *Manda l'evento a Home Assistant* (event `pressione_lunga` on the **Ingresso** event entity).
-
-Press, release, click and double-click events were removed on purpose: for a wall switch, latency matters more.
-
-## Wiring note (unofficial)
-
-The SW input of a Shelly Gen4 also appeared to work when the push button connects it to **neutral** instead of live. This is **not documented by Shelly** and is derived only from **brief, informal tests** on a 2PM Gen4 (a few dozen short and long presses, no missed or bouncing presses seen) and from unofficial forum reports. Neutral-side switching reportedly draws more current while pressed: irrelevant for push buttons, not advisable for switches left closed for long periods. Verify on your own hardware and have the wiring checked by a qualified electrician.
-
-## Keeping it stable
-
-Pin packages to a tag (`@v3.3.0`), never `@main`. Running firmware is not affected by Home Assistant/ESPHome updates; only the next compile is. ESPHome caches GitHub packages for one day, so use a new tag when you change them.
-
-## Versions
-
-- v3.4.0: adjustable number of `setPilot` sends per command ("Invii setPilot Wiz", 1-10, default 4 = previous behaviour at 1400 ms), spread evenly within the confirmation time.
-- v3.3.0: adjustable confirmation time ("Tempo conferma Wiz"); the push subscription (`syncPilot`) now also counts as command confirmation; logs show direct reply vs SUBSCRIPTION counts. Fixes spurious failsafe with a single slow-to-answer bulb.
-- v3.2.0: default push-button command on release; after a power loss the Wiz are always commanded on with the switch-on values.
-- v3.1.0: long press toggles between the normal and alternative colour combinations; fields renamed `Wiz - ...` in a fixed order.
-- v3.0.0: push-button behaviour: command on press or on release, long press (alternative brightness/colour or event to HA); all new fields prefixed `Wiz - `; removed multi-click switch and press/release/click events. Entities "Accensione software: ..." renamed to "Wiz - ...".
-- v2.1.x: on-colour fields (brightness/colour temperature at switch-on), input mode labels explained.
-- v2.0.0: package based on the Mini logic (adjustable quorum, optional power-cycle); entity names changed for the 2PM.
-- v1.1.0: on-colour fields next to each other, readable PWM help.
-- v1.0.0: first release.
-
-## Moduli (ramo `modularizzazione-per-sperimentazione`, v5.0.0 sperimentale)
-
-Questo ramo è la `modularizzazione` riallineata alla base del ramo `sperimentale` (`shelly-gen4/configs/shelly-relay-input.yaml`: relè, Relay Mode, impulso e ingresso in un solo posto, con Modalità Input, blocco, inversione, antirimbalzo, pressione lunga, simulazione ed evento). I moduli qui sono **componenti aggiuntivi** per le Wiz: stesse funzioni del ramo `modularizzazione`, ma l'ingresso e il relè sono quelli della base, non più un "Switch Input" specchiato con Relay Linking = Unlinked.
-
-Il YAML del dispositivo include la base (`shelly-2pm-gen4.yaml`, `shelly-1pm-mini-gen4.yaml`, ...) del ramo `sperimentale` e, **dopo**, i moduli:
-
-```yaml
 packages:
   base:
-    url: https://github.com/Gionames/esphome-shelly-wiz-physical-failsafe
-    ref: sperimentale
-    files: [shelly-gen4/configs/shelly-2pm-gen4.yaml]
+    url: https://github.com/Gionames/SECF
+    ref: gen4-v1.0.11
+    files: [shelly-gen4/configs/shelly-1pm-mini-gen4.yaml]
   wiz:
     url: https://github.com/Gionames/esphome-shelly-wiz-physical-failsafe
-    ref: modularizzazione-per-sperimentazione
+    ref: modulare-secf
+    refresh: always
     files:
       - packages/versions.yaml
-      - packages/wiz-core.yaml            # obbligatorio: comandi Wiz, failsafe (su comando e proattivo), entità di stato del failsafe
-      - packages/input.yaml               # aggancia l'ingresso della base alle Wiz: azione, pressione lunga (alternativi, dimmer)
-      - packages/timer.yaml               # obbligatorio per ora (da rendere generico)
-      - packages/wiz-diagnostics.yaml     # opzionale
-      - packages/wifi-settings.yaml       # opzionale
-      - packages/recovery-ap.yaml         # opzionale: AP + captive portal di recupero
-      - packages/coil-pwm.yaml            # opzionale
+      - packages/wiz-core.yaml
+      - packages/input.yaml
+      - packages/timer.yaml
+      - packages/coil-pwm.yaml
+
+esphome:
+  name: ${name}
+wifi:
+  use_address: ${ip}
+web_server:
+  js_url: https://cdn.jsdelivr.net/gh/Gionames/esphome-shelly-wiz-physical-failsafe@<commit>/web/collapse.js
 ```
 
-Ordine: i moduli vanno dopo la base (le substitution dei package successivi prevalgono). Punti di aggancio della base usati da `input.yaml`: `input_action` e `input_longpress_hook` (le azioni si accodano con `!extend`), `input_to_relay` (a false: l'ingresso non comanda il relè), `input_fast` (in failsafe il comando "al rilascio" resta immediato). Cambiano rispetto a `modularizzazione`: sparisce lo specchio `switch_input_mirror` e il Relay Linking; le opzioni della pressione lunga sono Nessuna azione, Evento a Home Assistant, Valori alternativi, Dimmer (indici 0-3); le entità generiche perdono il prefisso "Wiz - " e, su 2PM, il canale 1 ha il suffisso " 1". Il monolite `wiz-physical-failsafe.yaml` è rimosso.
+Ordine: i moduli vanno **dopo** la base. Aggiungi `api`, `wifi` e le altre sezioni come nei tuoi YAML. Gli altri nomi di lampada (`wiz_label_3`...) sono opzionali.
 
-Verificato con `esphome config` (base 2PM + moduli). **Non provato su hardware.**
+## Dopo una modifica: basta riflashare gli stessi YAML?
+
+- **Modifica ai moduli `packages/*.yaml`**: basta ricompilare e installare gli stessi YAML (il Builder riscarica il ramo, `refresh: always`). Non serve cambiarli.
+- **Modifica a `web/collapse.js`**: l'indirizzo in `js_url` punta a un commit preciso (jsDelivr tiene in cache i rami). Serve aggiornare `<commit>` in ogni YAML e reinstallare, perché `js_url` fa parte del firmware.
+
+## Comando del pulsante
+
+Con **Alla pressione** il pulsante spegne subito la luce: la pressione lunga parte quindi da luce spenta e il dimmer riparte dal minimo e sale, quindi non si può dimmerare verso il basso. Con **Al rilascio** (consigliato) il dimmer parte dalla luminosità attuale. È un campo a runtime: si cambia dalla pagina web o da HA, senza riflashare.
+
+## Stato
+
+Software sperimentale: provato su alcuni Mini (1PM Mini Gen4), non su tutti i modelli. Gli zip di conversione e le release della base sono nel repository SECF e non sono verificati su tutto l'hardware: prova prima su un dispositivo non critico. Il failsafe e le sue frequenze di attivazione sono ancora oggetto di osservazione.
+
+Nota di cablaggio non ufficiale: l'ingresso SW di uno Shelly Gen4 è sembrato funzionare anche con il pulsante verso il **neutro**. Non è documentato da Shelly e deriva solo da prove brevi e informali; falla controllare da un elettricista.
+
+## Stabilità
+
+Fissa sempre la base a un tag (`gen4-v1.0.11`), non a `main`. Il firmware già installato non cambia con gli aggiornamenti di Home Assistant/ESPHome: contano solo alla compilazione successiva.
+
+## Storico
+
+I rami precedenti (`main` con il monolite `wiz-physical-failsafe.yaml` v3, `modularizzazione`, `modularizzazione-per-sperimentazione`, `sperimentale`) sono storici e non più mantenuti.
+
+## Origine e licenza
+
+Lavoro derivato da [automatous-io/shelly-gen4-esphome](https://github.com/automatous-io/shelly-gen4-esphome) v1.5.2, licenza Apache 2.0 (vedi [SECF](https://github.com/Gionames/SECF)).
