@@ -1,9 +1,9 @@
-# wiz-core.yaml (v5.7.0) - modulo unico: comandi Wiz UDP, quorum, failsafe sul relè (su comando e proattivo),
+# wiz-core.yaml (v5.8.0) - modulo unico: comandi Wiz UDP, quorum, failsafe sul relè (su comando e proattivo),
 # luce nativa per HA, accensione, numeri di regolazione, entità di stato del failsafe.
 # OBBLIGATORIO. Richiede la base "sperimentale" (shelly-relay-input.yaml, che definisce ingresso e relè) e i moduli input e timer.
 
 substitutions:
-  ver_wiz_core: "5.7.0"            # versione del package (stampata nel log all'avvio)
+  ver_wiz_core: "5.8.0"            # versione del package (stampata nel log all'avvio)
   wiz_group_name: "Light"
   wiz_label_1: "Wiz 1"      # nome mostrato in HA per la lampada in posizione 1 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
   wiz_label_2: "Wiz 2"      # nome mostrato in HA per la lampada in posizione 2 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
@@ -16,7 +16,7 @@ substitutions:
   wiz_need: "std::max(1, std::min((int) id(wiz_quorum_num).state, id(wiz_n)))"   # lampade che devono rispondere (entità "Quorum Wiz", regolabile da HA/pagina web), mai più di quelle configurate
   wiz_retry_ms: "400"            # ogni quanto rimanda il comando alle lampade che non hanno ancora risposto
   wiz_deadline_ms: "((int) id(wiz_confirm_num).state)"   # tempo massimo per un comando di accensione/spegnimento: entità "Tempo conferma Wiz" (HA/pagina web)
-  wiz_confirm_ms: "((int) id(wiz_confirm_num).state * 4 / 7)"   # tempo massimo per getPilot (conferma e lettura periodica): 4/7 di "Tempo conferma Wiz" (800 ms a 1400)
+  wiz_confirm_ms: "((int) id(wiz_confirm_num).state * 4 / 7)"   # tempo massimo per getPilot (conferma e lettura periodica): 4/7 di "Tempo conferma Wiz" (285 ms a 500)
   powercycle_ms: "0"             # relè aperto per tanto se nessuna Wiz risponde ma è alimentata (0 = disattivato)
   health_check_interval: "4s"    # ogni quanto controlla le Wiz: a luce accesa è il polling del failsafe proattivo, con failsafe attivo prova a uscirne
   poll_interval_ms: "30000"      # a luce spenta: rilettura di sicurezza dello stato ogni tanto (la sottoscrizione lo tiene già aggiornato)
@@ -63,7 +63,15 @@ globals:
     initial_value: "400"
   - id: wiz_deadline
     type: int
-    initial_value: "1400"
+    initial_value: "500"
+  - id: wiz_gp_next        # istante (ms dall'inizio del comando) del prossimo getPilot di controllo durante un setPilot
+    type: uint32_t
+    initial_value: "0"
+  - id: wiz_alive          # ha risposto a un getPilot di controllo durante il comando in corso (lampada viva anche senza ack al setPilot)
+    type: bool[8]
+  - id: wiz_n_live         # lampade vive al termine dell'ultimo comando: con ack al comando oppure con risposta al getPilot di controllo
+    type: int
+    initial_value: "0"
   - id: wiz_t0
     type: uint32_t
     initial_value: "0"
@@ -747,7 +755,7 @@ number:
     mode: box
     optimistic: true
     restore_value: true
-    initial_value: 1400
+    initial_value: 500
     web_server:
       sorting_group_id: grp_wiz
       sorting_weight: 22
@@ -766,21 +774,6 @@ number:
     web_server:
       sorting_group_id: grp_wiz
       sorting_weight: 20
-  - platform: template
-    name: "Invii setPilot Wiz"
-    id: wiz_sends_num
-    icon: mdi:repeat
-    entity_category: config
-    min_value: 1
-    max_value: 10
-    step: 1
-    mode: box
-    optimistic: true
-    restore_value: true
-    initial_value: 4
-    web_server:
-      sorting_group_id: grp_wiz
-      sorting_weight: 23
 
 script:
   # Cambio di una "luminosità massima": rimanda subito alle lampade i valori attuali della luce (stessa pipeline dei comandi di HA),
@@ -850,23 +843,22 @@ script:
           s->setblocking(false);
           id(wiz_sock) = s.release();
           id(wiz_kind) = kind;
-          // setPilot (acceso/spento): gli invii sono "Invii setPilot Wiz" (entità, default 4), distribuiti
-          // in modo uniforme entro il tempo massimo (4 invii a 1400 ms = ogni 350 ms). getPilot usa retry_ms.
+          // setPilot (acceso/spento): un invio ogni 100 ms fino al tempo massimo (a 500 ms: 0, 100, 200, 300, 400). In più, da 42% del tempo massimo
+          // (210 ms a 500) un getPilot di controllo ogni 100 ms alle lampade che non hanno ancora risposto: una risposta prova che la lampada è viva
+          // (se manca anche quella, a fine tempo scatta subito il failsafe, senza una seconda fase). getPilot usa retry_ms.
           if (kind > 0) {
-            int sends = (int) id(wiz_sends_num).state;
-            if (sends < 1) sends = 1;
-            if (sends > 10) sends = 10;
-            int r = deadline_ms / sends;
-            id(wiz_retry) = r < 60 ? 60 : r;
+            id(wiz_retry) = 100;
           } else {
             id(wiz_retry) = retry_ms;
           }
           id(wiz_deadline) = deadline_ms;
+          id(wiz_gp_next) = (uint32_t) deadline_ms * 21 / 50;
           id(wiz_t0) = millis();
           id(wiz_next) = 0;
           for (int i = 0; i < id(wiz_n); i++) {
             id(wiz_acked)[i] = false;
             id(wiz_via_sub)[i] = false;
+            id(wiz_alive)[i] = false;
             id(wiz_rtt)[i] = 0;
             // un comando di accensione/spegnimento aggiorna subito lo stato atteso, senza aspettare gli ack:
             // così due azioni ravvicinate sull'interruttore si alternano correttamente
@@ -933,6 +925,20 @@ script:
                   }
                   id(wiz_next) += id(wiz_retry);
                 }
+                // getPilot di controllo durante un setPilot: solo alle lampade che non hanno risposto né al comando né a un controllo
+                if (ck > 0 && el >= id(wiz_gp_next) && el < (uint32_t) id(wiz_deadline)) {
+                  for (int i = 0; i < n; i++) {
+                    if (id(wiz_acked)[i] || id(wiz_alive)[i]) continue;
+                    struct sockaddr_in d;
+                    memset(&d, 0, sizeof(d));
+                    d.sin_family = AF_INET;
+                    d.sin_port = htons(38899);
+                    d.sin_addr.s_addr = id(wiz_ip32)[i];
+                    const char *gp = R"({"method":"getPilot","params":{}})";
+                    id(wiz_sock)->sendto(gp, strlen(gp), 0, (struct sockaddr *) &d, sizeof(d));
+                  }
+                  id(wiz_gp_next) += 100;
+                }
 
                 // 2) risposte arrivate finora (lettura non bloccante); si riconosce la lampada dall'IP di origine
                 for (int guard = 0; guard < 24; guard++) {
@@ -949,6 +955,11 @@ script:
                     if (id(wiz_ip32)[j] == src) { i = j; break; }
                   }
                   if (i < 0 || id(wiz_acked)[i]) continue;
+                  // risposta a un getPilot di controllo durante un setPilot: la lampada è viva (non conta come ack del comando)
+                  if (ck != 0 && strstr(buf, "getPilot") != nullptr) {
+                    id(wiz_alive)[i] = true;
+                    continue;
+                  }
                   if (ck == 0) {
                     if (strstr(buf, "getPilot") == nullptr) continue;
                     const char *p = strstr(buf, "\"state\":");
@@ -992,6 +1003,12 @@ script:
                 }
                 if (ok == n || el >= (uint32_t) id(wiz_deadline)) {
                   id(wiz_n_ok) = ok;
+                  int live = ok;
+                  for (int i = 0; i < n; i++) {
+                    if (!id(wiz_acked)[i] && id(wiz_alive)[i]) live++;
+                  }
+                  id(wiz_n_live) = live;
+                  if (ck != 0 && ok < n) ESP_LOGW("wiz", "%s: lampade vive (risposta al getPilot di controllo o al comando) %d/%d", ck == 1 ? "setPilot ON" : ck == 3 ? "setPilot ON (HA)" : "setPilot OFF", live, n);
                   const char *kn = ck == 0 ? "getPilot" : ck == 1 ? "setPilot ON" : ck == 3 ? "setPilot ON (HA)" : "setPilot OFF";
                   if (ok < n) {
                     char miss[96];
@@ -1168,31 +1185,18 @@ script:
                 condition:
                   lambda: 'return !id(wiz_busy);'
                 timeout: 5s
-            # troppo poche risposte: prima di arrendermi chiedo lo stato (se rispondono, è solo un comando perso)
+            # troppo poche risposte al comando: i getPilot di controllo mandati durante il comando dicono se le lampade sono vive (solo comando perso: nessun failsafe)
             - if:
                 condition:
-                  lambda: 'return id(wiz_n_ok) < ${wiz_need};'
+                  lambda: 'return id(wiz_n_ok) < ${wiz_need} && id(wiz_n_live) >= ${wiz_need};'
                 then:
-                  - script.execute:
-                      id: wiz_cmd
-                      kind: 0
-                      retry_ms: ${wiz_retry_ms}
-                      deadline_ms: !lambda 'return ${wiz_confirm_ms};'
-                  - wait_until:
-                      condition:
-                        lambda: 'return !id(wiz_busy);'
-                      timeout: 5s
-                  - if:
-                      condition:
-                        lambda: 'return id(wiz_n_ok) >= ${wiz_need};'
-                      then:
-                        - lambda: 'ESP_LOGW("wiz", "comando senza ack sufficienti ma le Wiz rispondono (%d): nessun failsafe", id(wiz_n_ok));'
+                  - lambda: 'ESP_LOGW("wiz", "comando senza ack sufficienti ma le Wiz rispondono (%d): nessun failsafe", id(wiz_n_live));'
             - if:
                 condition:
-                  lambda: 'return id(wiz_n_ok) < ${wiz_need};'
+                  lambda: 'return id(wiz_n_live) < ${wiz_need};'
                 then:
                   - lambda: |-
-                      ESP_LOGW("wiz", "Wiz non risponde (%d, minimo %d): failsafe", id(wiz_n_ok), ${wiz_need});
+                      ESP_LOGW("wiz", "Wiz non risponde (%d, minimo %d): failsafe", id(wiz_n_live), ${wiz_need});
                       id(fs_proactive) = false;
                       id(failsafe_mode) = true;
                   - if:

@@ -20,7 +20,7 @@ Questo ramo è la versione in uso. Sta sopra la base [SECF](https://github.com/G
 
 | File | Versione | Ruolo |
 |---|---|---|
-| `packages/wiz-core.yaml` | 5.7.0 | comandi Wiz, quorum, failsafe, luce nativa, limiti, valori di accensione (obbligatorio) |
+| `packages/wiz-core.yaml` | 5.8.0 | comandi Wiz, quorum, failsafe, luce nativa, limiti, valori di accensione (obbligatorio) |
 | `packages/input.yaml` | 5.2.0 | aggancia l'ingresso della base alle Wiz: azione, pressione lunga, dimmer (obbligatorio) |
 | `packages/timer.yaml` | 4.0.1 | auto-off / auto-on (obbligatorio per ora) |
 | `packages/versions.yaml` | 1.0.0 | gruppo "Versions" della pagina web (in ogni YAML) |
