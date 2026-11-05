@@ -1,0 +1,9 @@
+# compile-limit.yaml
+# Limita i processi di compilazione paralleli. Le librerie Matter hanno file C++ molto pesanti:
+# con tutti i core in parallelo il compilatore (cc1plus) viene ucciso per memoria esaurita ("Killed signal").
+# Più basso = più lento ma sicuro. Per cambiare il valore su tutti i dispositivi basta modificarlo qui.
+substitutions:
+  ver_compile_limit: "1.0.0"
+
+esphome:
+  compile_process_limit: 2
