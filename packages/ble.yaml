@@ -1,0 +1,81 @@
+# BLE: unica sorgente Bluetooth per i Mini sulla base SECF (gen4-v1.0.12 o ramo ble-modulare, che non ha piu' il BLE).
+# Scansione solo passiva e proxy senza connessioni. Interruttore "Bluetooth Proxy" (id bluetooth_proxy_switch)
+# per spegnere la radio a runtime. La scansione gira solo a Wi-Fi collegato: una scansione continua
+# affama l'hotspot di riserva e l'accesso fallisce come se la password fosse sbagliata.
+# NON usare insieme a ble-passive.yaml (quello e' per le basi precedenti, che hanno ancora il BLE).
+esp32_ble_tracker:
+  id: ble_tracker
+  scan_parameters:
+    active: false
+    continuous: false
+
+bluetooth_proxy:
+  active: false
+
+wifi:
+  on_connect:
+    - if:
+        condition:
+          switch.is_on: bluetooth_proxy_switch
+        then:
+          - esp32_ble_tracker.start_scan:
+              continuous: true
+  on_disconnect:
+    - esp32_ble_tracker.stop_scan:
+
+switch:
+  - platform: template
+    name: "Bluetooth Proxy"
+    id: bluetooth_proxy_switch
+    icon: mdi:bluetooth
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    # la scansione va fermata del tutto prima di spegnere la radio, altrimenti lo scanner resta
+    # bloccato a meta' stop e non riparte dopo ble.enable
+    turn_on_action:
+      - ble.enable:
+      - wait_until:
+          condition: ble.enabled
+          timeout: 5s
+      - delay: 100ms
+      - if:
+          condition: wifi.connected
+          then:
+            - esp32_ble_tracker.start_scan:
+                continuous: true
+    turn_off_action:
+      - esp32_ble_tracker.stop_scan:
+      - wait_until:
+          condition:
+            lambda: 'return id(ble_tracker)->get_scanner_state() == esp32_ble_tracker::ScannerState::IDLE;'
+          timeout: 2s
+      - ble.disable:
+
+substitutions:
+  ver_ble: "1.0.0"   # versione del package (stampata nel log all'avvio)
+
+esphome:
+  on_boot:
+    - priority: 900
+      then:
+        - delay: 2s   # dopo l'avvio dei componenti, altrimenti lo stato della versione resta vuoto
+        - text_sensor.template.publish:
+            id: ver_ble_ts
+            state: "${ver_ble}"
+        - delay: 9s   # dopo il collegamento del log di rete, altrimenti la riga si perde
+        - logger.log:
+            format: "pacchetto ble v${ver_ble}"
+            level: INFO
+            tag: pacchetti
+
+text_sensor:
+  - platform: template
+    name: "Versione - ble-passive"
+    id: ver_ble_ts
+    icon: mdi:tag-outline
+    entity_category: diagnostic
+    update_interval: never
+    web_server:
+      sorting_group_id: grp_ver
+      sorting_weight: 70
