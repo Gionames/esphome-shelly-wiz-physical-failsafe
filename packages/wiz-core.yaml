@@ -1,9 +1,9 @@
-# wiz-core.yaml (v5.8.0) - modulo unico: comandi Wiz UDP, quorum, failsafe sul relè (su comando e proattivo),
+# wiz-core.yaml (v5.8.1) - modulo unico: comandi Wiz UDP, quorum, failsafe sul relè (su comando e proattivo),
 # luce nativa per HA, accensione, numeri di regolazione, entità di stato del failsafe.
 # OBBLIGATORIO. Richiede la base "sperimentale" (shelly-relay-input.yaml, che definisce ingresso e relè) e i moduli input e timer.
 
 substitutions:
-  ver_wiz_core: "5.8.0"            # versione del package (stampata nel log all'avvio)
+  ver_wiz_core: "5.8.1"            # versione del package (stampata nel log all'avvio)
   wiz_group_name: "Light"
   wiz_label_1: "Wiz 1"      # nome mostrato in HA per la lampada in posizione 1 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
   wiz_label_2: "Wiz 2"      # nome mostrato in HA per la lampada in posizione 2 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
@@ -416,8 +416,11 @@ light:
             return;
           }
           const int bri = (int) (rv.get_brightness() * 100.0f + 0.5f);
-          if (bri < 1) {   // slider a 0: luce spenta
-            id(wiz_request).execute(false, -1, 0, -1, -1, -1);
+          // luce spenta nella realtà e comando di accensione senza luminosità (assente o 0, come mandano Matter/Google/HA): accensione normale
+          // con i valori di accensione (2700 K e luminosità al limite impostato). Con la luce già accesa, slider a 0 = luce spenta.
+          const bool off_real = !id(light_on_sensor).state;
+          if (bri < 1) {
+            id(wiz_request).execute(off_real, -1, 0, -1, -1, -1);
             return;
           }
           // riaccensione semplice da software: luce spenta e HA rimanda i valori che ricordava (l'ultima media delle Wiz, lst_*) = accensione normale,
@@ -448,10 +451,20 @@ light:
           }
           const uint8_t cm = (uint8_t) rv.get_color_mode();
           if (cm & (uint8_t) light::ColorCapability::RGB) {
-            id(wiz_request).execute(true, bri, 0, (int) (rv.get_red() * 255.0f + 0.5f), (int) (rv.get_green() * 255.0f + 0.5f), (int) (rv.get_blue() * 255.0f + 0.5f));
+            const int cr = (int) (rv.get_red() * 255.0f + 0.5f), cg = (int) (rv.get_green() * 255.0f + 0.5f), cb = (int) (rv.get_blue() * 255.0f + 0.5f);
+            if (off_real && cr == 0 && cg == 0 && cb == 0) {   // colore a zero = non specificato: accensione normale
+              id(wiz_request).execute(true, -1, 0, -1, -1, -1);
+              return;
+            }
+            id(wiz_request).execute(true, bri, 0, cr, cg, cb);
           } else if (cm & ((uint8_t) light::ColorCapability::COLD_WARM_WHITE | (uint8_t) light::ColorCapability::COLOR_TEMPERATURE)) {
             const float mired = rv.get_color_temperature();
-            id(wiz_request).execute(true, bri, mired > 0 ? (int) (1000000.0f / mired + 0.5f) : 0, -1, -1, -1);
+            int kel = mired > 0 ? (int) (1000000.0f / mired + 0.5f) : 0;
+            if (kel < 2200 && off_real) {   // temperatura assente o 0: quella di accensione (2700 K di default)
+              kel = (int) id(wiz_on_kelvin).state;
+              if (kel < 2200 || kel > 6500) kel = 2700;
+            }
+            id(wiz_request).execute(true, bri, kel, -1, -1, -1);
           } else {
             id(wiz_request).execute(true, bri, 0, -1, -1, -1);
           }
