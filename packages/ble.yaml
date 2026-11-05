@@ -1,5 +1,5 @@
 # BLE: unica sorgente Bluetooth per i Mini sulla base SECF (gen4-v1.0.12 o ramo ble-modulare, che non ha piu' il BLE).
-# Scansione solo passiva e proxy senza connessioni. Interruttore "Bluetooth Proxy" (id bluetooth_proxy_switch)
+# Scansione solo passiva e proxy senza connessioni. Interruttore "Bluetooth BLE proxy passivo" (id bluetooth_proxy_switch)
 # per spegnere la radio a runtime. La scansione gira solo a Wi-Fi collegato: una scansione continua
 # affama l'hotspot di riserva e l'accesso fallisce come se la password fosse sbagliata.
 # NON usare insieme a ble-passive.yaml (quello e' per le basi precedenti, che hanno ancora il BLE).
@@ -25,7 +25,7 @@ wifi:
 
 switch:
   - platform: template
-    name: "Bluetooth Proxy"
+    name: "Bluetooth BLE proxy passivo"
     id: bluetooth_proxy_switch
     icon: mdi:bluetooth
     entity_category: config
@@ -53,7 +53,7 @@ switch:
       - ble.disable:
 
 substitutions:
-  ver_ble: "1.0.0"   # versione del package (stampata nel log all'avvio)
+  ver_ble: "1.0.1"   # versione del package (stampata nel log all'avvio)
 
 esphome:
   on_boot:
