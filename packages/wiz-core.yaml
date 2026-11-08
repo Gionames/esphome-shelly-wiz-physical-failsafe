@@ -1,9 +1,9 @@
-# wiz-core.yaml (v5.8.1) - modulo unico: comandi Wiz UDP, quorum, failsafe sul relè (su comando e proattivo),
+# wiz-core.yaml (v55.8.2 - modulo unico: comandi Wiz UDP, quorum, failsafe sul relè (su comando e proattivo),
 # luce nativa per HA, accensione, numeri di regolazione, entità di stato del failsafe.
 # OBBLIGATORIO. Richiede la base "sperimentale" (shelly-relay-input.yaml, che definisce ingresso e relè) e i moduli input e timer.
 
 substitutions:
-  ver_wiz_core: "5.8.1"            # versione del package (stampata nel log all'avvio)
+  ver_wiz_core: "5.8.2"            # versione del package (stampata nel log all'avvio)
   wiz_group_name: "Light"
   wiz_label_1: "Wiz 1"      # nome mostrato in HA per la lampada in posizione 1 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
   wiz_label_2: "Wiz 2"      # nome mostrato in HA per la lampada in posizione 2 di wiz_ips (nel YAML del Mini: es. "1 soggiorno sotto (192.168.1.189)")
@@ -1125,6 +1125,13 @@ script:
                     else if (id(lst_r) >= 0 && id(lst_g) >= 0 && id(lst_b) >= 0) l += snprintf(m + l, cap - l, ",\"r\":%d,\"g\":%d,\"b\":%d", id(lst_r), id(lst_g), id(lst_b));
                     snprintf(m + l, cap - l, "}}");
                     id(custom_bri) = id(lst_bri);
+                    id(alt_cur) = false;
+                    id(alt_on) = false;
+                    id(alt_req) = false;
+                    return 3;
+                  }
+                  // il failsafe è scattato per un comando di HA (valori in custom_msg): rimando quelli, non i valori di accensione (altrimenti le lampade saltano alla luminosità di accensione)
+                  if (id(sw_action) == 3) {
                     id(alt_cur) = false;
                     id(alt_on) = false;
                     id(alt_req) = false;
