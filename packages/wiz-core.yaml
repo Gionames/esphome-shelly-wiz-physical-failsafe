@@ -299,6 +299,7 @@ sensor:
   - platform: template
     name: "Wiz raggiunte"
     id: wiz_reach
+    internal: true   # solo uso interno: in HA si vede "Wiz raggiunte (su totale)" (es. 1/5)
     web_server:
       sorting_group_id: grp_luce
       sorting_weight: 40
